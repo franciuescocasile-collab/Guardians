@@ -41,73 +41,74 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.guardians.app.model.TimeUnit
 import com.guardians.app.model.TimerType
 
-/** Icona del timer: triangolo giallo (Sentinella), quadrato rosso (Guardiano), cerchio blu (Custode). */
+/**
+ * Icona del guardiano. Se per quel tipo esiste il PNG dell'elmo (forniti
+ * dall'utente), mostra quello; altrimenti disegna la forma geometrica di
+ * riserva (il Messaggero non ha ancora un elmo → resta il pentagono).
+ */
 @Composable
 fun TimerShapeIcon(type: TimerType, modifier: Modifier = Modifier) {
+    val res = guardianDrawable(type)
+    if (res != null) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(res),
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+        )
+        return
+    }
     Canvas(modifier) {
         val w = size.width
         val h = size.height
         val color = Color(type.colorArgb)
         when (type) {
-            // Triangolo giallo: forma provvisoria in attesa del file dell'elmo
-            // fornito dall'utente (PNG/vettoriale, da agganciare qui).
+            TimerType.MESSAGGERO -> drawPath(pentagonPath(w, h), color)
+            // Forme di riserva (usate solo se un PNG mancasse).
             TimerType.SENTINELLA -> {
                 val path = Path().apply {
-                    moveTo(w / 2f, 0f)
-                    lineTo(w, h * 0.95f)
-                    lineTo(0f, h * 0.95f)
-                    close()
+                    moveTo(w / 2f, 0f); lineTo(w, h * 0.95f); lineTo(0f, h * 0.95f); close()
                 }
                 drawPath(path, color)
             }
-
             TimerType.GUARDIANO -> drawRoundRect(
-                color = color,
-                cornerRadius = CornerRadius(w * 0.15f, w * 0.15f),
+                color = color, cornerRadius = CornerRadius(w * 0.15f, w * 0.15f),
             )
-
-            TimerType.CUSTODE -> drawCircle(
-                color = color,
-                radius = w * 0.46f,
-                center = Offset(w / 2f, h / 2f),
-            )
-
+            TimerType.CUSTODE -> drawCircle(color, w * 0.46f, Offset(w / 2f, h / 2f))
             TimerType.GENDARME -> {
                 val path = Path().apply {
-                    moveTo(w / 2f, 0f)
-                    lineTo(w, h / 2f)
-                    lineTo(w / 2f, h)
-                    lineTo(0f, h / 2f)
-                    close()
+                    moveTo(w / 2f, 0f); lineTo(w, h / 2f); lineTo(w / 2f, h); lineTo(0f, h / 2f); close()
                 }
                 drawPath(path, color)
             }
-
             TimerType.VEDETTA -> drawPath(starPath(w, h), color)
-
-            TimerType.MESSAGGERO -> drawPath(pentagonPath(w, h), color)
-
             TimerType.ESATTORE -> drawPath(hexagonPath(w, h), color)
-
-            // Alba d'argento: mezzo sole sopra la linea dell'orizzonte.
             TimerType.ARALDO -> {
                 drawArc(
-                    color = color,
-                    startAngle = 180f,
-                    sweepAngle = 180f,
-                    useCenter = true,
+                    color = color, startAngle = 180f, sweepAngle = 180f, useCenter = true,
                     topLeft = Offset(w * 0.1f, h * 0.22f),
                     size = androidx.compose.ui.geometry.Size(w * 0.8f, w * 0.8f),
                 )
                 drawRoundRect(
-                    color = color,
-                    topLeft = Offset(0f, h * 0.7f),
+                    color = color, topLeft = Offset(0f, h * 0.7f),
                     size = androidx.compose.ui.geometry.Size(w, h * 0.13f),
                     cornerRadius = CornerRadius(h * 0.065f, h * 0.065f),
                 )
             }
         }
     }
+}
+
+/** Il PNG dell'elmo per il tipo, o null se non c'è (Messaggero → forma). */
+private fun guardianDrawable(type: TimerType): Int? = when (type) {
+    TimerType.SENTINELLA -> com.guardians.app.R.drawable.guardian_sentinella
+    TimerType.GUARDIANO -> com.guardians.app.R.drawable.guardian_guardiano
+    TimerType.CUSTODE -> com.guardians.app.R.drawable.guardian_custode
+    TimerType.GENDARME -> com.guardians.app.R.drawable.guardian_gendarme
+    TimerType.VEDETTA -> com.guardians.app.R.drawable.guardian_vedetta
+    TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
+    TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
+    TimerType.MESSAGGERO -> null
 }
 
 /** Esagono (punta in alto) inscritto nell'area [w]×[h] (usato dall'Esattore). */

@@ -388,18 +388,29 @@ object OverlayManager {
         return root
     }
 
-    /** Triangolo giallo (Sentinella), quadrato rosso (Guardiano), cerchio blu (Custode). */
+    /** Elmo del guardiano (PNG) o forma geometrica di riserva. */
     private class ShapeView(context: Context, private val type: TimerType) : View(context) {
 
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = type.colorArgb.toInt()
             pathEffect = CornerPathEffect(18f)
         }
+        private val bitmap: android.graphics.Bitmap? = guardianOverlayDrawable(type)?.let {
+            try {
+                android.graphics.BitmapFactory.decodeResource(context.resources, it)
+            } catch (_: Throwable) {
+                null
+            }
+        }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             val w = width.toFloat()
             val h = height.toFloat()
+            bitmap?.let {
+                canvas.drawBitmap(it, null, android.graphics.RectF(0f, 0f, w, h), null)
+                return
+            }
             when (type) {
                 TimerType.SENTINELLA -> {
                     val path = Path().apply {
@@ -489,4 +500,16 @@ object OverlayManager {
             }
         }
     }
+}
+
+/** Il PNG dell'elmo per il tipo, o null (Messaggero → forma disegnata). */
+private fun guardianOverlayDrawable(type: TimerType): Int? = when (type) {
+    TimerType.SENTINELLA -> com.guardians.app.R.drawable.guardian_sentinella
+    TimerType.GUARDIANO -> com.guardians.app.R.drawable.guardian_guardiano
+    TimerType.CUSTODE -> com.guardians.app.R.drawable.guardian_custode
+    TimerType.GENDARME -> com.guardians.app.R.drawable.guardian_gendarme
+    TimerType.VEDETTA -> com.guardians.app.R.drawable.guardian_vedetta
+    TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
+    TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
+    TimerType.MESSAGGERO -> null
 }

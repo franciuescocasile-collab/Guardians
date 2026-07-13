@@ -1066,7 +1066,7 @@ private fun loadUsageSummary(context: Context): UsageSummary {
 
     val topApps = todayPerApp.entries
         .sortedByDescending { it.value }
-        .take(5)
+        .take(4)
         .map { TopApp(label(it.key), it.value, icon(it.key)) }
 
     // Categorie sugli ULTIMI 7 GIORNI (auto-riconosciute).

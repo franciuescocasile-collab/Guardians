@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,7 +33,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import com.guardians.app.data.BackupManager
 import com.guardians.app.data.SettingsRepository
 import com.guardians.app.data.tr
-import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -60,6 +59,7 @@ fun SettingsScreen(
     onOpenSigillo: () -> Unit,
     onOpenTravel: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenBattery: () -> Unit,
 ) {
     val context = LocalContext.current
     val darkTheme by SettingsRepository.darkTheme.collectAsState()
@@ -121,81 +121,39 @@ fun SettingsScreen(
             }
         }
 
-        // ------------------------------------------------ risparmio batteria
-        val batterySaver by SettingsRepository.batterySaver.collectAsState()
-        val batteryThreshold by SettingsRepository.batteryThreshold.collectAsState()
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(16.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(tr("Risparmio batteria", "Battery saver"), fontWeight = FontWeight.Bold)
-                        Text(
-                            tr(
-                                "Sotto la soglia i motori si spengono del tutto: blocchi " +
-                                    "e pedaggi in corso vengono rimossi e Guardians non " +
-                                    "consuma più nulla. Riprende da solo quando il telefono " +
-                                    "è in carica o risale sopra la soglia.",
-                                "Below the threshold the engines shut down completely: " +
-                                    "ongoing blocks and tolls are removed and Guardians " +
-                                    "consumes nothing. It resumes on its own when the phone " +
-                                    "is charging or back above the threshold.",
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = batterySaver,
-                        onCheckedChange = { SettingsRepository.setBatterySaver(context, it) },
-                    )
-                }
-                if (batterySaver) {
+        // ---------------------------------- Batteria (in una pagina dedicata)
+        Card(
+            onClick = onOpenBattery,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            ) {
+                Icon(
+                    Icons.Default.BatteryChargingFull,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr("Batteria", "Battery"), fontWeight = FontWeight.Bold)
                     Text(
                         tr(
-                            "Si attiva sotto il $batteryThreshold% di batteria",
-                            "Kicks in below $batteryThreshold% battery",
+                            "Risparmio batteria e \"tienimi sempre attivo\"",
+                            "Battery saver and \"keep me always running\"",
                         ),
                         style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                    Slider(
-                        value = batteryThreshold.toFloat(),
-                        onValueChange = {
-                            SettingsRepository.setBatteryThreshold(context, it.roundToInt())
-                        },
-                        valueRange = 10f..20f,
-                        steps = 9,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-        }
-
-        // ------------------------------- tienimi sempre attivo (anti-kill Samsung)
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(16.dp)) {
-                Text(tr("Tienimi sempre attivo", "Keep me always running"), fontWeight = FontWeight.Bold)
-                Text(
-                    tr(
-                        "Alcuni telefoni (soprattutto Samsung) mettono Guardians \"a " +
-                            "dormire\" quando apri un gioco o un'app pesante, e i guardiani " +
-                            "smettono di controllare. Tocca qui e concedi a Guardians di " +
-                            "ignorare l'ottimizzazione della batteria, così resta di guardia.",
-                        "Some phones (especially Samsung) put Guardians \"to sleep\" when " +
-                            "you open a game or a heavy app, and the guardians stop " +
-                            "watching. Tap here and allow Guardians to ignore battery " +
-                            "optimization, so it stays on duty.",
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(onClick = { openBatteryExemption(context) }) {
-                    Text(tr("Apri le impostazioni batteria", "Open battery settings"))
-                }
             }
         }
 
@@ -590,34 +548,6 @@ fun SettingsScreen(
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
-    }
-}
-
-/**
- * Porta l'utente dove concedere a Guardians di ignorare l'ottimizzazione della
- * batteria (la richiesta diretta; con ripieghi verso la lista e la scheda app),
- * così i telefoni aggressivi non lo mettono a dormire durante i giochi.
- */
-private fun openBatteryExemption(context: android.content.Context) {
-    val pkg = android.net.Uri.parse("package:" + context.packageName)
-    val intents = listOf(
-        android.content.Intent(
-            android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-        ).setData(pkg),
-        android.content.Intent(
-            android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
-        ),
-        android.content.Intent(
-            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-        ).setData(pkg),
-    )
-    for (intent in intents) {
-        try {
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
-            return
-        } catch (_: Throwable) {
-        }
     }
 }
 

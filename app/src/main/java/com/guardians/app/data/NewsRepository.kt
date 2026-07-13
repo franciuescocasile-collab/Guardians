@@ -29,6 +29,24 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.6.0",
+            "I guardiani indossano l'elmo",
+            "The guardians don their helms",
+            "I guardiani ora hanno le loro vere icone: gli elmi che hai disegnato, " +
+                "uno per tipo, in tutta l'app e come stemma del profilo (il " +
+                "Messaggero aspetta ancora il suo). Le impostazioni della batteria " +
+                "hanno una pagina dedicata con \"Risparmio batteria\" e \"Tienimi " +
+                "sempre attivo\" (ora un interruttore che ti porta a concedere il " +
+                "permesso). E nelle Statistiche le app più usate ora sono le 4 " +
+                "principali, più pulite.",
+            "The guardians now have their real icons: the helms you designed, one " +
+                "per type, across the app and as your profile crest (the Messenger " +
+                "still awaits its own). Battery settings get their own page with " +
+                "\"Battery saver\" and \"Keep me always running\" (now a switch that " +
+                "takes you to grant the permission). And in Statistics the most-used " +
+                "apps are now the top 4, cleaner.",
+        ),
+        NewsItem(
             "3.5.0",
             "Distacco → Sonno e telefono sempre di guardia",
             "Detach → Sleep and always on duty",
