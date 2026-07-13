@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Permesso speciale: l'utente lo concede da Impostazioni > Accesso ai dati di utilizzo -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Popup in sovraimpressione -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Chiedere di ignorare l'ottimizzazione batteria (telefoni che "addormentano"
+         le app in background, es. Samsung, durante i giochi). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Vibrazione (disattivabile) quando scatta un guardiano -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Posizione: serve solo alla Vedetta (guardiano basato sul luogo) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Miglior sforzo per chiudere il Picture-in-Picture dell'app bloccata -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- Necessario per elencare le app installate nel selettore -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!-- Predisposizione Health Connect: lettura delle sessioni di sonno per la
+         futura sezione "Il legame Mente-Sonno" (Statistiche). -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <queries>
+        <!-- L'app di Health Connect, per verificarne la presenza. -->
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
+
+    <application
+        android:name=".GuardiansApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Guardians">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Health Connect: schermata di motivazione dei permessi (sonno).
+                 Android 14+ usa VIEW_PERMISSION_USAGE, Android 13 e precedenti
+                 usano l'azione dedicata di Health Connect. -->
+            <intent-filter>
+                <action android:name="androidx.health.connect.action.HEALTH_CONNECT_SETTINGS" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".HealthPermissionsRationale"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <service
+            android:name=".service.MonitorService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Monitoraggio del tempo di utilizzo delle app per applicare i limiti impostati dall'utente" />
+        </service>
+
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Promemoria usa-e-getta del Notificatore (AlarmManager). -->
+        <receiver
+            android:name=".service.ReminderReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>

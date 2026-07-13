@@ -1,0 +1,17 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Chiavi di firma: MAI su GitHub!
+*.jks
+*.keystore
+
+*.log
+.DS_Store
