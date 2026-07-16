@@ -65,18 +65,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.guardians.app.data.HealthConnectManager
 
-/** Un'app tra le più usate: nome, tempo e icona vera presa dal sistema. */
+/** Un'app tra le più usate: nome, tempo, icona vera e colore della categoria. */
 private class TopApp(
     val label: String,
     val ms: Long,
     val icon: androidx.compose.ui.graphics.ImageBitmap?,
+    /** Colore ARGB della categoria (il pallino accanto all'icona). */
+    val categoryColor: Long,
 )
 
 /** Riepilogo dell'uso del telefono letto da UsageStatsManager. */
 private data class UsageSummary(
     val todayMs: Long,
-    /** Le app più usate oggi (già ordinate, max 5), con la loro icona. */
+    /** Le app più usate oggi (già ordinate, max 4), con la loro icona. */
     val topAppsToday: List<TopApp>,
+    /** TUTTE le app usate oggi (ordinate desc), per la pagina di dettaglio. */
+    val allAppsToday: List<TopApp>,
     /** Un elemento per giorno, dal più vecchio a oggi: iniziale del giorno -> ms. */
     val last7Days: List<Pair<String, Long>>,
     /** Categoria -> millisecondi di oggi (ordinate desc). */
@@ -99,8 +103,18 @@ fun StatsScreen(onBack: () -> Unit) {
 
     // 3° livello: andamento del tempo + calendario dell'obiettivo.
     var showTimeDetail by remember { mutableStateOf(false) }
+    // Dettaglio: l'uso di OGNI app di oggi (14.1).
+    var showAppsDetail by remember { mutableStateOf(false) }
     // Selettore di periodo del 2° livello.
     var period by remember { mutableStateOf(StatsPeriod.WEEK) }
+
+    if (showAppsDetail) {
+        AllAppsDetail(
+            apps = usage?.allAppsToday.orEmpty(),
+            onBack = { showAppsDetail = false },
+        )
+        return
+    }
 
     if (showTimeDetail) {
         StatsTimeDetail(onBack = { showTimeDetail = false })
@@ -269,22 +283,44 @@ fun StatsScreen(onBack: () -> Unit) {
         }
 
         // ----------------------- app e categorie di oggi, in un'unica card
+        // (14: prima le APP più usate — cliccabili → dettaglio — poi la torta)
         val categories = usage?.categoriesToday.orEmpty()
         val topApps = usage?.topAppsToday.orEmpty()
         if (categories.isNotEmpty() || topApps.isNotEmpty()) {
             item {
                 Card(
+                    onClick = { showAppsDetail = true },
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     ),
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text(
-                            tr("App e categorie", "Apps and categories"),
-                            fontWeight = FontWeight.Bold,
-                        )
-                        // La torta delle macro-categorie in cima.
+                        // Prima le app più usate di oggi (tocca per il dettaglio).
+                        if (topApps.isNotEmpty()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    tr("App più usate oggi", "Most used apps today"),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = tr("Tutte le app", "All apps"),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            val maxMs = topApps.first().ms.coerceAtLeast(1L)
+                            topApps.forEach { app -> AppUsageRow(app, maxMs) }
+                        }
+                        // Sotto, la torta delle macro-categorie.
                         if (categories.isNotEmpty()) {
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                tr("Categorie (ultimi 7 giorni)", "Categories (last 7 days)"),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
                             Spacer(Modifier.height(12.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 CategoryPie(categories, Modifier.size(110.dp))
@@ -320,61 +356,12 @@ fun StatsScreen(onBack: () -> Unit) {
                                 }
                             }
                         }
-                        // Sotto, la lista completa delle app più usate di oggi.
-                        if (topApps.isNotEmpty()) {
-                            Spacer(Modifier.height(16.dp))
-                            Text(
-                                tr("App più usate oggi", "Most used apps today"),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            val maxMs = topApps.first().ms.coerceAtLeast(1L)
-                            topApps.forEach { app ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(vertical = 4.dp),
-                                ) {
-                                    if (app.icon != null) {
-                                        androidx.compose.foundation.Image(
-                                            bitmap = app.icon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(30.dp),
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                    }
-                                    Column(Modifier.weight(1f)) {
-                                        Text(app.label, style = MaterialTheme.typography.bodyMedium)
-                                        Spacer(Modifier.height(3.dp))
-                                        Box(
-                                            Modifier
-                                                .fillMaxWidth(
-                                                    (app.ms.toFloat() / maxMs.toFloat())
-                                                        .coerceIn(0.05f, 1f)
-                                                )
-                                                .height(6.dp)
-                                                .background(
-                                                    MaterialTheme.colorScheme.primary,
-                                                    RoundedCornerShape(3.dp),
-                                                )
-                                        )
-                                    }
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        formatMs(app.ms),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }
         }
 
-        // ------------------------------- il legame mente-sonno (Health Connect)
-        item { SleepConnectCard() }
+        // Il legame mente-sonno ora vive nella pagina SONNO (card in home).
 
     }
 }
@@ -386,7 +373,7 @@ fun StatsScreen(onBack: () -> Unit) {
  * mostra il passo successivo, senza mai bloccare.
  */
 @Composable
-private fun SleepConnectCard() {
+internal fun SleepConnectCard() {
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -1064,10 +1051,17 @@ private fun loadUsageSummary(context: Context): UsageSummary {
         null
     }
 
-    val topApps = todayPerApp.entries
+    // Tutte le app di oggi (per la pagina di dettaglio), con colore categoria.
+    val allApps = todayPerApp.entries
         .sortedByDescending { it.value }
-        .take(4)
-        .map { TopApp(label(it.key), it.value, icon(it.key)) }
+        .filter { it.value >= 30_000L }  // sotto i 30s è rumore
+        .map {
+            TopApp(
+                label(it.key), it.value, icon(it.key),
+                com.guardians.app.model.categoryOf(context, it.key).colorArgb,
+            )
+        }
+    val topApps = allApps.take(4)
 
     // Categorie sugli ULTIMI 7 GIORNI (auto-riconosciute).
     val categories = weekPerApp.entries
@@ -1080,12 +1074,103 @@ private fun loadUsageSummary(context: Context): UsageSummary {
     return UsageSummary(
         todayMs = todayMs,
         topAppsToday = topApps,
+        allAppsToday = allApps,
         last7Days = days,
         categoriesToday = categories,
         weekMs = weekMs,
         monthMs = sumSince(30),
         yearMs = sumSince(365),
     )
+}
+
+/**
+ * Una riga "app + uso": pallino del colore della categoria accanto all'icona
+ * (14.2), barra proporzionale e minutaggio a destra.
+ */
+@Composable
+private fun AppUsageRow(app: TopApp, maxMs: Long) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 4.dp),
+    ) {
+        // Il pallino della categoria, poi l'icona vera dell'app.
+        Box(
+            Modifier
+                .size(10.dp)
+                .background(Color(app.categoryColor), androidx.compose.foundation.shape.CircleShape)
+        )
+        Spacer(Modifier.width(8.dp))
+        if (app.icon != null) {
+            androidx.compose.foundation.Image(
+                bitmap = app.icon,
+                contentDescription = null,
+                modifier = Modifier.size(30.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(app.label, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(3.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth((app.ms.toFloat() / maxMs.toFloat()).coerceIn(0.05f, 1f))
+                    .height(6.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary,
+                        RoundedCornerShape(3.dp),
+                    )
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            formatMs(app.ms),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Il dettaglio con l'uso di OGNI app di oggi (14.1): così si vede anche cosa
+ * arriva da Maps, Spotify, Android Auto e simili. Pallino = categoria.
+ */
+@Composable
+private fun AllAppsDetail(apps: List<TopApp>, onBack: () -> Unit) {
+    androidx.activity.compose.BackHandler { onBack() }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
+                }
+                Text(
+                    tr("Tutte le app di oggi", "All of today's apps"),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        if (apps.isEmpty()) {
+            item {
+                Text(
+                    tr("Nessun uso registrato oggi (per ora).", "No usage recorded today (yet)."),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+        } else {
+            val maxMs = apps.first().ms.coerceAtLeast(1L)
+            items(apps.size) { i -> AppUsageRow(apps[i], maxMs) }
+        }
+    }
 }
 
 /**

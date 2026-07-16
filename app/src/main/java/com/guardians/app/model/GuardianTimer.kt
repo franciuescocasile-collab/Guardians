@@ -33,6 +33,9 @@ enum class MessengerPace(
     GENTILE("Gentile", "Gentle", 0.75),
     MEDIA("Media", "Medium", 0.55),
     INCALZANTE("Incalzante", "Pressing", 0.4),
+
+    /** Bombardamento: gap che crolla a ogni avviso, pavimento più basso (10s). */
+    INSOPPORTABILE("Insopportabile", "Unbearable", 0.22),
     ;
 
     val displayName: String get() = tr(nameIt, nameEn)
@@ -328,6 +331,10 @@ data class GuardianTimer(
      */
     fun messengerGapMs(noticesSent: Int): Long = when (pace) {
         MessengerPace.PROGRAMMABILE -> resetMs.coerceAtLeast(MESSENGER_FLOOR_MS)
+        // Insopportabile: pavimento più basso (10s), per il vero bombardamento.
+        MessengerPace.INSOPPORTABILE ->
+            (limitMs * Math.pow(pace.factor, noticesSent.toDouble()))
+                .toLong().coerceAtLeast(10_000L)
         else -> (limitMs * Math.pow(pace.factor, noticesSent.toDouble()))
             .toLong().coerceAtLeast(MESSENGER_FLOOR_MS)
     }

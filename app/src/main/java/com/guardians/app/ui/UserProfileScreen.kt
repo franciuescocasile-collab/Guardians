@@ -218,87 +218,7 @@ fun UserProfileScreen(
             // stemma): dal profilo è stata rimossa su richiesta dell'utente.
         }
 
-        // ------- solo streak + media storica, con il nuovo lessico esteso
-        val streak by androidx.compose.runtime.produceState(0, dailyGoal) {
-            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.guardians.app.data.ConductRepository
-                    .focusStreak(context, dailyGoal * 60_000L)
-            }
-        }
-        val avgMs = UsageHistoryRepository.dailyAverageMs()
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            MetricTile(
-                big = "🔥 $streak",
-                label = tr(
-                    "Giorni consecutivi obiettivo raggiunto",
-                    "Consecutive days goal met",
-                ),
-                modifier = Modifier.weight(1f),
-            )
-            MetricTile(
-                big = if (avgMs > 0L) formatMs(avgMs) else "—",
-                label = tr(
-                    "Media d'uso giornaliera storica",
-                    "Historical daily usage average",
-                ),
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        // ------------------------------------------------ bacheca dei record
-        val topGuardian = stats.entries
-            .maxByOrNull { it.value.totalBlocks + it.value.totalRejected }
-            ?.value
-            ?.takeIf { it.totalBlocks + it.totalRejected > 0 }
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(tr("Bacheca", "Highlights"), fontWeight = FontWeight.Bold)
-                if (topGuardian == null) {
-                    Text(
-                        tr(
-                            "Quando un guardiano ti fermerà, qui comparirà il tuo " +
-                                "\"più severo\".",
-                            "When a guardian stops you, your \"strictest\" one shows up here.",
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        topGuardian.type?.let {
-                            TimerShapeIcon(it, Modifier.size(34.dp))
-                            Spacer(Modifier.width(12.dp))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                tr("Il guardiano più severo", "Your strictest guardian"),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                topGuardian.name +
-                                    (topGuardian.type?.let { " · ${it.shortName}" } ?: ""),
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                        Text(
-                            "${topGuardian.totalBlocks + topGuardian.totalRejected}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            tr("volte", "times"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-
-        // ------------------------------------ OBIETTIVO GIORNALIERO (compatto)
+        // --------------- OBIETTIVO GIORNALIERO: subito sotto il nome (19.1)
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(
                 Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -382,52 +302,87 @@ fun UserProfileScreen(
             }
         }
 
-        // ------------------------------------------ L'ARALDO E IL SONNO (grande)
-        val median by AraldoData.medianBedtimeMinute.collectAsState()
+        // ------- solo streak + media storica, con il nuovo lessico esteso
+        val streak by androidx.compose.runtime.produceState(0, dailyGoal) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.guardians.app.data.ConductRepository
+                    .focusStreak(context, dailyGoal * 60_000L)
+            }
+        }
+        val avgMs = UsageHistoryRepository.dailyAverageMs()
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricTile(
+                big = "🔥 $streak",
+                label = tr(
+                    "Giorni consecutivi obiettivo raggiunto",
+                    "Consecutive days goal met",
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            MetricTile(
+                big = if (avgMs > 0L) formatMs(avgMs) else "—",
+                label = tr(
+                    "Media d'uso giornaliera storica",
+                    "Historical daily usage average",
+                ),
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        // ------------------------------------------------ bacheca dei record
+        val topGuardian = stats.entries
+            .maxByOrNull { it.value.totalBlocks + it.value.totalRejected }
+            ?.value
+            ?.takeIf { it.totalBlocks + it.totalRejected > 0 }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TimerShapeIcon(TimerType.ARALDO, Modifier.size(24.dp))
-                    Spacer(Modifier.width(10.dp))
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(tr("Bacheca", "Highlights"), fontWeight = FontWeight.Bold)
+                if (topGuardian == null) {
                     Text(
-                        tr("L'Araldo e il tuo sonno", "The Herald and your sleep"),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Text(
-                    if (median != null) {
                         tr(
-                            "Nanna imparata: ~${formatTimeOfDay(median!!)}",
-                            "Learned bedtime: ~${formatTimeOfDay(median!!)}",
-                        )
-                    } else {
-                        tr(
-                            "L'Araldo usa i tuoi orari indicativi e intanto impara i veri.",
-                            "The Herald uses your indicative times while learning the real ones.",
-                        )
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (median != null) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = if (median != null) FontWeight.Bold else FontWeight.Normal,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TimeOfDayPicker(
-                        label = tr("A dormire verso le", "To sleep around"),
-                        minuteOfDay = bedMinute.takeIf { it >= 0 },
-                        onChange = { ProfileRepository.setUsualBedMinute(context, it) },
-                        modifier = Modifier.weight(1f),
+                            "Quando un guardiano ti fermerà, qui comparirà il tuo " +
+                                "\"più severo\".",
+                            "When a guardian stops you, your \"strictest\" one shows up here.",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    TimeOfDayPicker(
-                        label = tr("Sveglia verso le", "Wake around"),
-                        minuteOfDay = wakeMinute.takeIf { it >= 0 },
-                        onChange = { ProfileRepository.setUsualWakeMinute(context, it) },
-                        modifier = Modifier.weight(1f),
-                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        topGuardian.type?.let {
+                            TimerShapeIcon(it, Modifier.size(34.dp))
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                tr("Il guardiano più severo", "Your strictest guardian"),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                topGuardian.name +
+                                    (topGuardian.type?.let { " · ${it.shortName}" } ?: ""),
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Text(
+                            "${topGuardian.totalBlocks + topGuardian.totalRejected}",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            tr("volte", "times"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
+
+        // L'Araldo e il sonno ora vivono nella pagina SONNO (card in home).
 
         // ------------------------------------------- collegamento al perché
         Card(

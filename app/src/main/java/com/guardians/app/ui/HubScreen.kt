@@ -31,7 +31,9 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -62,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.guardians.app.data.NewsRepository
 import com.guardians.app.data.ProfileRepository
-import com.guardians.app.data.SettingsRepository
 import com.guardians.app.data.SpellsRepository
 import com.guardians.app.data.TimerRepository
 import com.guardians.app.data.tr
@@ -86,6 +87,7 @@ fun HubScreen(
     onOpenFreeze: () -> Unit,
     onOpenNotifier: () -> Unit,
     onOpenStats: () -> Unit,
+    onOpenSleep: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -209,11 +211,7 @@ fun HubScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             MiniConductBar(good, Modifier.weight(1f))
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                "🔥 $streak",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
+                            StreakFlame(streak)
                         }
                     }
                 }
@@ -301,107 +299,153 @@ fun HubScreen(
 
         Spacer(Modifier.height(4.dp))
 
-        HubCard(
-            title = tr("Nuovo guardiano", "New guardian"),
-            subtitle = tr(
-                "Crea un timer e assegnalo a una squadra",
-                "Create a timer and assign it to a team",
-            ),
-            icon = Icons.Default.Shield,
-            onClick = onCreateTimer,
-        )
-
-        // Squadre: la card spiega cosa sono, non conta i membri.
-        HubCard(
-            title = tr("Squadre", "Teams"),
-            subtitle = tr(
-                "Raggruppa i guardiani in cartelle per gestirli insieme e " +
-                    "pianificarne i giorni",
-                "Group your guardians into folders to manage them together and " +
-                    "schedule their days",
-            ),
-            // Un gruppo di figure insieme: rende l'idea di una squadra di
-            // guardiani molto più della vecchia cartella.
-            icon = Icons.Default.Groups,
-            onClick = onOpenTeams,
-        )
-
-        // Congelamento: la card apre la pagina del Cerchio del Gelo.
-        val freezeUntil by SpellsRepository.freezeUntil.collectAsState()
-        val freezeOvertime by SpellsRepository.freezeOvertime.collectAsState()
-        UsageStateStore.state.collectAsState().value // il tick aggiorna il countdown
-        val nowMs = System.currentTimeMillis()
-        HubCard(
-            title = tr("Congelamento", "Freeze"),
-            subtitle = when {
-                freezeUntil > 0L && nowMs < freezeUntil ->
-                    tr("Telefono congelato ancora per ", "Phone frozen for ") +
-                        formatMs((freezeUntil - nowMs).coerceAtLeast(1000L))
-                freezeUntil > 0L && freezeOvertime ->
-                    tr("Oltre il tempo: +", "Past time: +") +
-                        formatMs((nowMs - freezeUntil).coerceAtLeast(1000L)) +
-                        tr(" — grande!", " — great!")
-                else -> tr(
-                    "Isolamento totale: decidi tu quanto stare lontano dal telefono",
-                    "Total isolation: you decide how long to stay off the phone",
+        // ORDINE E VISIBILITÀ delle card: configurabili da Impostazioni →
+        // "La homepage". Le card essenziali si possono solo spostare; Guide,
+        // Notificatore e Sonno anche nascondere (i dati restano sempre).
+        com.guardians.app.data.HomeConfigRepository.load(context)
+        val cardOrder by com.guardians.app.data.HomeConfigRepository.order.collectAsState()
+        val hiddenCards by com.guardians.app.data.HomeConfigRepository.hidden.collectAsState()
+        for (cardKey in cardOrder) {
+            if (cardKey in hiddenCards) continue
+            when (cardKey) {
+                com.guardians.app.data.HomeConfigRepository.CARD_GUARDIANI -> HubCard(
+                    title = tr("Nuovo guardiano", "New guardian"),
+                    subtitle = tr(
+                        "Crea un timer e assegnalo a una squadra",
+                        "Create a timer and assign it to a team",
+                    ),
+                    icon = Icons.Default.Shield,
+                    onClick = onCreateTimer,
                 )
-            },
-            icon = Icons.Default.AcUnit,
-            onClick = onOpenFreeze,
-        )
 
-        // Il Notificatore: promemoria usa-e-getta. La card appare SOLO se attivata
-        // nelle Impostazioni (di default è nascosta; i promemoria restano salvati).
-        com.guardians.app.data.NotifierRepository.load(context)
-        val showNotifier by SettingsRepository.showNotifierCard.collectAsState()
-        if (showNotifier) {
-            val reminders by com.guardians.app.data.NotifierRepository.reminders.collectAsState()
-            HubCard(
-                title = tr("Il Notificatore", "The Notifier"),
-                subtitle = if (reminders.isEmpty()) {
-                    tr(
-                        "Promemoria usa-e-getta: bevi acqua, alzati, respira…",
-                        "One-time reminders: drink water, stand up, breathe…",
-                    )
-                } else {
-                    tr(
-                        plural(reminders.size, "promemoria in programma", "promemoria in programma"),
-                        plural(reminders.size, "reminder scheduled", "reminders scheduled"),
-                    )
-                },
-                icon = Icons.Default.Alarm,
-                onClick = onOpenNotifier,
-            )
-        }
+                com.guardians.app.data.HomeConfigRepository.CARD_SQUADRE -> HubCard(
+                    title = tr("Squadre", "Teams"),
+                    subtitle = tr(
+                        "Raggruppa i guardiani in cartelle per gestirli insieme e " +
+                            "pianificarne i giorni",
+                        "Group your guardians into folders to manage them together and " +
+                            "schedule their days",
+                    ),
+                    // Un gruppo di figure insieme: l'idea della squadra.
+                    icon = Icons.Default.Groups,
+                    onClick = onOpenTeams,
+                )
 
-        // Statistiche: card fissa con il tempo di oggi (la Modalità Viaggio è
-        // stata spostata nelle Impostazioni).
-        val todayUsage by androidx.compose.runtime.produceState<Long?>(initialValue = null) {
-            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                todayUsageMs(context)
+                com.guardians.app.data.HomeConfigRepository.CARD_FREEZE -> {
+                    val freezeUntil by SpellsRepository.freezeUntil.collectAsState()
+                    val freezeOvertime by SpellsRepository.freezeOvertime.collectAsState()
+                    UsageStateStore.state.collectAsState().value // tick → countdown vivo
+                    val nowMs = System.currentTimeMillis()
+                    HubCard(
+                        title = tr("Congelamento", "Freeze"),
+                        subtitle = when {
+                            freezeUntil > 0L && nowMs < freezeUntil ->
+                                tr("Telefono congelato ancora per ", "Phone frozen for ") +
+                                    formatMs((freezeUntil - nowMs).coerceAtLeast(1000L))
+                            freezeUntil > 0L && freezeOvertime ->
+                                tr("Oltre il tempo: +", "Past time: +") +
+                                    formatMs((nowMs - freezeUntil).coerceAtLeast(1000L)) +
+                                    tr(" — grande!", " — great!")
+                            else -> tr(
+                                "Isolamento totale: decidi tu quanto stare lontano dal telefono",
+                                "Total isolation: you decide how long to stay off the phone",
+                            )
+                        },
+                        icon = Icons.Default.AcUnit,
+                        onClick = onOpenFreeze,
+                    )
+                }
+
+                com.guardians.app.data.HomeConfigRepository.CARD_NOTIFIER -> {
+                    com.guardians.app.data.NotifierRepository.load(context)
+                    val reminders by com.guardians.app.data.NotifierRepository
+                        .reminders.collectAsState()
+                    HubCard(
+                        title = tr("Il Notificatore", "The Notifier"),
+                        subtitle = if (reminders.isEmpty()) {
+                            tr(
+                                "Promemoria usa-e-getta: bevi acqua, alzati, respira…",
+                                "One-time reminders: drink water, stand up, breathe…",
+                            )
+                        } else {
+                            tr(
+                                plural(reminders.size, "promemoria in programma", "promemoria in programma"),
+                                plural(reminders.size, "reminder scheduled", "reminders scheduled"),
+                            )
+                        },
+                        icon = Icons.Default.Alarm,
+                        onClick = onOpenNotifier,
+                    )
+                }
+
+                com.guardians.app.data.HomeConfigRepository.CARD_STATS -> {
+                    val todayUsage by androidx.compose.runtime.produceState<Long?>(
+                        initialValue = null,
+                    ) {
+                        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            todayUsageMs(context)
+                        }
+                    }
+                    StatsHubCard(
+                        todayMs = todayUsage,
+                        onClick = onOpenStats,
+                    )
+                }
+
+                com.guardians.app.data.HomeConfigRepository.CARD_SLEEP -> HubCard(
+                    title = tr("Sonno", "Sleep"),
+                    subtitle = tr(
+                        "L'ultima dormita, il legame col telefono e l'Araldo",
+                        "Last night's sleep, the phone link and the Herald",
+                    ),
+                    icon = Icons.Default.Bedtime,
+                    onClick = onOpenSleep,
+                )
+
+                com.guardians.app.data.HomeConfigRepository.CARD_GUIDE -> HubCard(
+                    title = tr("Guide", "Guides"),
+                    subtitle = tr(
+                        "Articoli e consigli su misura per te",
+                        "Articles and tips tailored to you",
+                    ),
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    onClick = onOpenGuides,
+                )
             }
         }
-        StatsHubCard(
-            todayMs = todayUsage,
-            onClick = onOpenStats,
-        )
-
-        // Guide: spostata in fondo alla home.
-        HubCard(
-            title = tr("Guide", "Guides"),
-            subtitle = tr(
-                "Articoli e consigli su misura per te",
-                "Articles and tips tailored to you",
-            ),
-            icon = Icons.AutoMirrored.Filled.MenuBook,
-            onClick = onOpenGuides,
-        )
     }
 }
 
 /** "1 squadra attiva" / "3 squadre attive": singolare/plurale puliti. */
 private fun plural(n: Int, one: String, many: String): String =
     "$n " + if (n == 1) one else many
+
+/**
+ * La fiamma dello streak (23): icona in stile Material come le altre card, ma
+ * GRANDE e con il numero dei giorni di fila DENTRO il corpo della fiamma.
+ */
+@Composable
+private fun StreakFlame(streak: Int) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(38.dp)) {
+        Icon(
+            Icons.Default.LocalFireDepartment,
+            contentDescription = tr(
+                "$streak giorni di fila sotto l'obiettivo",
+                "$streak days in a row under the goal",
+            ),
+            tint = Color(0xFFFF8A3C),
+            modifier = Modifier.size(38.dp),
+        )
+        // Il numero, nel corpo basso della fiamma (sopra la parte più larga).
+        Text(
+            streak.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF10141F),
+            modifier = Modifier.padding(top = 10.dp),
+        )
+    }
+}
 
 /** Mini barra della condotta per l'header (rosso sx → verde dx, cursore sottile). */
 @Composable

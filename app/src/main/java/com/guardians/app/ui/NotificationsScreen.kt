@@ -39,7 +39,6 @@ fun NotificationsScreen(onBack: () -> Unit) {
     val sound by SettingsRepository.soundOnAlert.collectAsState()
     val weeklyReport by SettingsRepository.weeklyReport.collectAsState()
     val monitor by SettingsRepository.monitorNotification.collectAsState()
-    val notifierCard by SettingsRepository.showNotifierCard.collectAsState()
 
     Column(
         modifier = Modifier
@@ -103,17 +102,8 @@ fun NotificationsScreen(onBack: () -> Unit) {
             checked = weeklyReport,
             onCheckedChange = { SettingsRepository.setWeeklyReport(context, it) },
         )
-        NotifRow(
-            title = tr("Mostra il Notificatore in home", "Show the Notifier on home"),
-            description = tr(
-                "Aggiunge la card del Notificatore nella schermata iniziale. " +
-                    "Spegnendola la card sparisce ma i promemoria restano salvati.",
-                "Adds the Notifier card to the home screen. Turning it off hides " +
-                    "the card but keeps your reminders saved.",
-            ),
-            checked = notifierCard,
-            onCheckedChange = { SettingsRepository.setShowNotifierCard(context, it) },
-        )
+        // La visibilità della card del Notificatore in home si gestisce ora da
+        // Impostazioni → La homepage (insieme a ordine e altre card).
     }
 }
 

@@ -1,8 +1,11 @@
 package com.guardians.app.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -187,6 +192,10 @@ fun CongelamentoScreen(onBack: () -> Unit) {
         .coerceIn(0f, 1f)
 
     Box(Modifier.fillMaxSize()) {
+    // GLASSMORPHISM (20): in sessione, dietro al pannello di vetro c'è un
+    // fondale ghiacciato SFOCATO (il blur vero richiede Android 12+; sotto,
+    // resta il fondale morbido senza sfocatura).
+    if (sessionActive) IceBackdrop(Modifier.fillMaxSize())
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -215,11 +224,27 @@ fun CongelamentoScreen(onBack: () -> Unit) {
         }
 
         if (sessionActive) {
-            // ------------------------------------------ sessione in corso
+            // ------------------------------- sessione in corso (vetro ghiacciato)
             val inOvertime = now >= freezeUntil
             val totalMs = (freezeUntil - startedAt).coerceAtLeast(1L)
             val remainingFrac = if (inOvertime) 0f
             else ((freezeUntil - now).toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+            // Pannello semi-trasparente con bordo luminoso azzurro ghiaccio
+            // (#E0F7FA) e opacità bassissima: l'effetto "vetro ghiacciato".
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(androidx.compose.ui.graphics.Color(0x14E0F7FA))
+                    .border(
+                        width = 1.dp,
+                        color = androidx.compose.ui.graphics.Color(0x99E0F7FA),
+                        shape = RoundedCornerShape(28.dp),
+                    )
+                    .padding(20.dp),
+            ) {
             FreezeCircle(
                 progress = if (inOvertime) 1f else 1f - remainingFrac,
                 enabled = false,
@@ -280,6 +305,7 @@ fun CongelamentoScreen(onBack: () -> Unit) {
                     },
                     fontWeight = FontWeight.Bold,
                 )
+            }
             }
         } else {
             // ------------------------------------------ scelta della durata
@@ -388,6 +414,23 @@ fun CongelamentoScreen(onBack: () -> Unit) {
         // Overlay "brina": una cornice ghiacciata sui bordi che si infittisce
         // man mano che aumenti la durata. Il Canvas non intercetta i tocchi.
         FrostOverlay(intensity = frost, modifier = Modifier.fillMaxSize())
+    }
+}
+
+/**
+ * Fondale "vetro ghiacciato" per la sessione attiva: grandi aloni azzurro
+ * ghiaccio SFOCATI (blur reale su Android 12+, altrimenti restano morbidi).
+ * Sta dietro al pannello traslucido e non intercetta i tocchi.
+ */
+@Composable
+private fun IceBackdrop(modifier: Modifier = Modifier) {
+    val ice = androidx.compose.ui.graphics.Color(0xFFE0F7FA)
+    Canvas(modifier.blur(48.dp)) {
+        val w = size.width
+        val h = size.height
+        drawCircle(ice.copy(alpha = 0.16f), radius = w * 0.55f, center = Offset(w * 0.15f, h * 0.20f))
+        drawCircle(ice.copy(alpha = 0.12f), radius = w * 0.65f, center = Offset(w * 0.95f, h * 0.45f))
+        drawCircle(ice.copy(alpha = 0.14f), radius = w * 0.50f, center = Offset(w * 0.30f, h * 0.90f))
     }
 }
 

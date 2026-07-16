@@ -291,7 +291,7 @@ fun StatsTimeDetail(onBack: () -> Unit) {
                 var lineView by remember { mutableStateOf(true) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        tr("Andamento · scorri lateralmente", "Trend · swipe sideways"),
+                        tr("Andamento", "Trend"),
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f),
                     )

@@ -383,6 +383,53 @@ class MonitorService : Service() {
         // Esclusioni fisse (telefono, impostazioni…) + quelle scelte dall'utente.
         val excludedNow = excluded + ExclusionsRepository.excluded.value
 
+        // IL TEMPO SCORRE ANCHE SOTTO INCANTESIMO (regola dell'utente): i
+        // guardiani sospesi da Viaggio, Ombra o giorni di riposo NON bloccano,
+        // ma i loro conteggi (tempo giornaliero, uso continuo, aperture)
+        // continuano a correre. Un'Ombra di 2h non "regala" 2h di Instagram:
+        // finito l'incantesimo, il guardiano riprende coi conteggi veri.
+        run {
+            val activeIds = timers.mapTo(HashSet()) { it.id }
+            val suspended = TimerRepository.timers.value
+                .filter { it.enabled && it.id !in activeIds }
+            if (suspended.isEmpty()) return@run
+            for (timer in suspended) {
+                val effType =
+                    if (timer.type == TimerType.VEDETTA) timer.innerType else timer.type
+                val isTarget = foreground != null && !excludedNow.contains(foreground) &&
+                    (timer.allApps || timer.packages.contains(foreground))
+                when (effType) {
+                    TimerType.GUARDIANO -> if (isTarget) {
+                        dailyMs[timer.id] = (dailyMs[timer.id] ?: 0L) + elapsed
+                    }
+
+                    TimerType.SENTINELLA -> if (isTarget) {
+                        continuousMs[timer.id] = (continuousMs[timer.id] ?: 0L) + elapsed
+                        lastSeenMs[timer.id] = now
+                    } else {
+                        val seen = lastSeenMs[timer.id] ?: 0L
+                        if (seen != 0L && now - seen >= timer.resetMs) {
+                            continuousMs[timer.id] = 0L
+                            lastSeenMs.remove(timer.id)
+                        }
+                    }
+
+                    TimerType.GENDARME -> if (isTarget) {
+                        val lastSeen = gendarmeLastSeen[timer.id] ?: 0L
+                        val away = if (lastSeen == 0L) Long.MAX_VALUE else now - lastSeen
+                        if (foregroundJustChanged && away > OPEN_GAP_MS) {
+                            gendarmeOpens[timer.id] = (gendarmeOpens[timer.id] ?: 0) + 1
+                        }
+                        gendarmeLastSeen[timer.id] = now
+                    }
+
+                    // Custode, Esattore, Messaggero e Araldo non hanno contatori
+                    // cumulativi: sospesi, semplicemente non intervengono.
+                    else -> Unit
+                }
+            }
+        }
+
         // Incantesimo di Congelamento: blocco totale del telefono. Con il
         // conteggio oltre-scadenza attivo, il blocco regge anche dopo lo zero,
         // finché la sessione non viene terminata a mano da Guardians.
@@ -570,7 +617,14 @@ class MonitorService : Service() {
                 }
 
                 TimerType.ARALDO -> {
-                    if (isTarget) {
+                    // STANDBY (19.2): con la card Sonno nascosta dalla home,
+                    // l'Araldo non blocca. I dati (risvegli, nanne) continuano
+                    // a essere raccolti da trackScreenForAraldo: rimostrando la
+                    // card, l'Araldo si risveglia con lo storico intatto.
+                    com.guardians.app.data.HomeConfigRepository.load(this)
+                    if (com.guardians.app.data.HomeConfigRepository.isSleepHidden()) {
+                        // niente blocchi finché è in standby
+                    } else if (isTarget) {
                         val minuteOfDay = LocalTime.now().let { it.hour * 60 + it.minute }
                         // Mattina: blocco per limitMs dal VERO risveglio (se caduto
                         // nella finestra del timer). Se oggi non ne abbiamo ancora

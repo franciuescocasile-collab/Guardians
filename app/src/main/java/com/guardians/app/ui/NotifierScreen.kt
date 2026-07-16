@@ -15,10 +15,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -73,6 +79,8 @@ fun NotifierScreen(onBack: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Il filtro notturno vive nel menù a 3 puntini in alto a destra (22).
+        var showNightFilter by remember { mutableStateOf(false) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
@@ -87,6 +95,78 @@ fun NotifierScreen(onBack: () -> Unit) {
                 tr("Il Notificatore", "The Notifier"),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            Box {
+                var menu by remember { mutableStateOf(false) }
+                IconButton(onClick = { menu = true }) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = tr("Altre opzioni", "More options"),
+                    )
+                }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(tr("Filtro notturno", "Night filter")) },
+                        onClick = {
+                            menu = false
+                            showNightFilter = true
+                        },
+                    )
+                }
+            }
+        }
+
+        if (showNightFilter) {
+            val nightOn by NotifierRepository.nightFilter.collectAsState()
+            val nightFrom by NotifierRepository.nightFrom.collectAsState()
+            val nightTo by NotifierRepository.nightTo.collectAsState()
+            AlertDialog(
+                onDismissRequest = { showNightFilter = false },
+                title = { Text(tr("Filtro notturno", "Night filter")) },
+                text = {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                tr(
+                                    "Durante queste ore i promemoria arrivano in silenzio",
+                                    "During these hours reminders arrive silently",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = nightOn,
+                                onCheckedChange = {
+                                    NotifierRepository.setNightFilter(context, it)
+                                },
+                            )
+                        }
+                        if (nightOn) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                TimeOfDayPicker(
+                                    label = tr("Dalle", "From"),
+                                    minuteOfDay = nightFrom,
+                                    onChange = { NotifierRepository.setNightFrom(context, it) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TimeOfDayPicker(
+                                    label = tr("Alle", "To"),
+                                    minuteOfDay = nightTo,
+                                    onChange = { NotifierRepository.setNightTo(context, it) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showNightFilter = false }) {
+                        Text(tr("Chiudi", "Close"))
+                    }
+                },
             )
         }
         Text(
@@ -146,49 +226,6 @@ fun NotifierScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(tr("Scegli un orario preciso…", "Pick an exact time…"))
-                }
-            }
-        }
-
-        // ---------------------------------------------------- filtro notturno
-        val nightOn by NotifierRepository.nightFilter.collectAsState()
-        val nightFrom by NotifierRepository.nightFrom.collectAsState()
-        val nightTo by NotifierRepository.nightTo.collectAsState()
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(tr("Filtro notturno", "Night filter"), fontWeight = FontWeight.Bold)
-                        Text(
-                            tr(
-                                "Durante queste ore i promemoria arrivano in silenzio",
-                                "During these hours reminders arrive silently",
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = nightOn,
-                        onCheckedChange = { NotifierRepository.setNightFilter(context, it) },
-                    )
-                }
-                if (nightOn) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TimeOfDayPicker(
-                            label = tr("Dalle", "From"),
-                            minuteOfDay = nightFrom,
-                            onChange = { NotifierRepository.setNightFrom(context, it) },
-                            modifier = Modifier.weight(1f),
-                        )
-                        TimeOfDayPicker(
-                            label = tr("Alle", "To"),
-                            minuteOfDay = nightTo,
-                            onChange = { NotifierRepository.setNightTo(context, it) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
                 }
             }
         }

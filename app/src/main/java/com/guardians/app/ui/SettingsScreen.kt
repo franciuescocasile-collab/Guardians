@@ -19,16 +19,19 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,6 +59,7 @@ fun SettingsScreen(
     onOpenNotifications: () -> Unit,
     onOpenBattery: () -> Unit,
     onOpenPersonalization: () -> Unit,
+    onOpenHomeConfig: () -> Unit,
     onOpenAdvanced: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -80,8 +84,30 @@ fun SettingsScreen(
             )
         }
 
+        // ------------------------- ricerca tra le impostazioni (9): il filtro
+        // guarda anche le voci DENTRO le sottopagine (es. "tema" trova
+        // Personalizzazione), così nulla si perde crescendo.
+        var query by remember { mutableStateOf("") }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text(tr("Cerca un'impostazione", "Search a setting")) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        fun match(vararg keywords: String): Boolean {
+            val q = query.trim()
+            if (q.isBlank()) return true
+            return keywords.any { it.contains(q, ignoreCase = true) }
+        }
+
         // -------------------------------- Notifiche (in una pagina dedicata)
-        Card(
+        if (match(
+                "notifiche", "notifications", "avvisi", "vibrazione", "suono",
+                "resoconto settimanale", "monitoraggio", "weekly report",
+            )
+        ) Card(
             onClick = onOpenNotifications,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
@@ -117,7 +143,11 @@ fun SettingsScreen(
         }
 
         // ---------------------------------- Batteria (in una pagina dedicata)
-        Card(
+        if (match(
+                "batteria", "battery", "risparmio", "tienimi sempre attivo",
+                "ottimizzazione", "always running", "saver",
+            )
+        ) Card(
             onClick = onOpenBattery,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
@@ -154,7 +184,7 @@ fun SettingsScreen(
 
         // ------------------------------------------------------------ sigillo
         val sealDelay by com.guardians.app.data.SealRepository.delayMs.collectAsState()
-        Card(
+        if (match("sigillo", "seal", "attesa", "ritardo modifiche", "protezione")) Card(
             onClick = onOpenSigillo,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
@@ -195,7 +225,7 @@ fun SettingsScreen(
         }
 
         // -------------------------------------------------------- app escluse
-        Card(
+        if (match("app escluse", "excluded apps", "esclusioni", "bloccare", "sicurezza")) Card(
             onClick = onOpenExclusions,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
@@ -233,7 +263,12 @@ fun SettingsScreen(
         }
 
         // ------------------------------------------ personalizzazione dell'app
-        Card(
+        if (match(
+                "personalizzazione", "personalization", "tema", "theme", "scuro",
+                "chiaro", "lingua", "language", "inglese", "italiano", "settimana",
+                "primo giorno", "inizio del giorno", "conferma", "week", "dark",
+            )
+        ) Card(
             onClick = onOpenPersonalization,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
@@ -268,11 +303,51 @@ fun SettingsScreen(
             }
         }
 
+        // -------------------------------------------------------- la homepage
+        if (match(
+                "homepage", "home", "card", "ordine", "nascondi", "sonno",
+                "notificatore", "guide", "order", "hide",
+            )
+        ) Card(
+            onClick = onOpenHomeConfig,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            ) {
+                Icon(
+                    Icons.Default.Home,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr("La homepage", "The home page"), fontWeight = FontWeight.Bold)
+                    Text(
+                        tr(
+                            "Scegli quali card vedere in home e in che ordine",
+                            "Choose which cards to show on home and their order",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         // --------------------------------------------------- modalità viaggio
         com.guardians.app.data.TravelRepository.load(context)
         val travelUntil by com.guardians.app.data.TravelRepository.activeUntil.collectAsState()
         val travelActive = System.currentTimeMillis() < travelUntil
-        Card(
+        if (match("viaggio", "travel", "trasferta", "pausa guardiani", "vacanza")) Card(
             onClick = onOpenTravel,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {
@@ -346,6 +421,7 @@ fun SettingsScreen(
             }
         }
 
+        if (match("backup", "esporta", "importa", "export", "import", "ripristino", "configurazione"))
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(16.dp)) {
                 Text(
@@ -390,7 +466,7 @@ fun SettingsScreen(
         }
 
         // ------------------------------------------------ impostazioni avanzate
-        Card(
+        if (match("avanzate", "advanced", "esperti", "power users")) Card(
             onClick = onOpenAdvanced,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         ) {

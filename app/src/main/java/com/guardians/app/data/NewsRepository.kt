@@ -29,6 +29,34 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.8.0",
+            "Sonno, homepage su misura e vetro ghiacciato",
+            "Sleep, tailored home and frosted glass",
+            "Nuova card SONNO in home: dentro ci sono l'ultima dormita, il legame " +
+                "Distacco→Sonno e l'Araldo coi suoi orari (via dal profilo, dove " +
+                "l'obiettivo è salito sotto il nome). Da Impostazioni → \"La " +
+                "homepage\" scegli quali card vedere e in che ordine; nascondendo " +
+                "il Sonno l'Araldo va in standby (i dati continuano a raccogliersi). " +
+                "Il tempo ora SCORRE anche sotto incantesimo o viaggio: niente " +
+                "blocchi, ma i conteggi corrono. Il Messaggero guadagna il livello " +
+                "Insopportabile. Nelle statistiche: app più usate in cima (tocca " +
+                "per vedere OGNI app, col pallino della categoria). La fiamma " +
+                "dello streak è più grande col numero dentro, le impostazioni " +
+                "hanno la ricerca, il filtro notturno del Notificatore vive nei " +
+                "3 puntini e il Congelamento indossa il vetro ghiacciato.",
+            "New SLEEP card on home: last night's sleep, the Detach→Sleep link " +
+                "and the Herald with its times (moved out of the profile, where " +
+                "the goal now sits under your name). From Settings → \"The home " +
+                "page\" choose which cards to show and their order; hiding Sleep " +
+                "puts the Herald on standby (data keeps being collected). Time now " +
+                "FLOWS even under spells or travel: no blocks, but counters run. " +
+                "The Messenger gains the Unbearable pace. In statistics: most-used " +
+                "apps on top (tap to see EVERY app, with its category dot). The " +
+                "streak flame is bigger with the number inside, settings got a " +
+                "search bar, the Notifier's night filter lives in the 3-dot menu " +
+                "and the Freeze wears frosted glass.",
+        ),
+        NewsItem(
             "3.7.0",
             "Sagome ritagliate e condotta in prima fila",
             "Cut-out silhouettes and conduct up front",

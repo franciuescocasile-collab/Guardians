@@ -41,8 +41,10 @@ import com.guardians.app.ui.HubScreen
 import com.guardians.app.ui.NewsScreen
 import com.guardians.app.ui.AdvancedScreen
 import com.guardians.app.ui.BatteryScreen
+import com.guardians.app.ui.HomeConfigScreen
 import com.guardians.app.ui.NotificationsScreen
 import com.guardians.app.ui.PersonalizationScreen
+import com.guardians.app.ui.SleepScreen
 import com.guardians.app.ui.NotifierScreen
 import com.guardians.app.ui.OnboardingScreen
 import com.guardians.app.ui.ProfileScreen
@@ -103,7 +105,7 @@ class MainActivity : ComponentActivity() {
 private enum class Screen {
     HUB, TEAMS, TIMERS, EDIT, PICKER, EXCLUSIONS, SETTINGS, STATS, SIGILLO, PROFILE, SPELLS,
     GUIDES, NEWS, USER_PROFILE, FREEZE, NOTIFIER, TRAVEL, NOTIFICATIONS, BATTERY,
-    PERSONALIZATION, ADVANCED,
+    PERSONALIZATION, ADVANCED, SLEEP, HOME_CONFIG,
 }
 
 /** Bozza del timer in modifica, con i campi numerici come testo per la digitazione. */
@@ -417,6 +419,7 @@ private fun GuardiansNav() {
             onOpenFreeze = { navigate(Screen.FREEZE) },
             onOpenNotifier = { navigate(Screen.NOTIFIER) },
             onOpenStats = { navigate(Screen.STATS) },
+            onOpenSleep = { navigate(Screen.SLEEP) },
             onOpenSettings = { navigate(Screen.SETTINGS) },
         )
 
@@ -490,6 +493,7 @@ private fun GuardiansNav() {
             onOpenNotifications = { navigate(Screen.NOTIFICATIONS) },
             onOpenBattery = { navigate(Screen.BATTERY) },
             onOpenPersonalization = { navigate(Screen.PERSONALIZATION) },
+            onOpenHomeConfig = { navigate(Screen.HOME_CONFIG) },
             onOpenAdvanced = { navigate(Screen.ADVANCED) },
         )
 
@@ -500,6 +504,10 @@ private fun GuardiansNav() {
         Screen.PERSONALIZATION -> PersonalizationScreen(onBack = { goBack() })
 
         Screen.ADVANCED -> AdvancedScreen(onBack = { goBack() })
+
+        Screen.SLEEP -> SleepScreen(onBack = { goBack() })
+
+        Screen.HOME_CONFIG -> HomeConfigScreen(onBack = { goBack() })
 
         Screen.STATS -> StatsScreen(onBack = { goBack() })
 
