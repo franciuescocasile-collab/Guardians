@@ -556,12 +556,14 @@ fun GuidesScreen(
         return
     }
 
-    // Filtro per testo (titolo, sommario, corpo).
+    // Filtro per testo (titolo, sommario, corpo). Gli spazi ai bordi della
+    // query non contano: "sonno " trova comunque la guida sul sonno.
+    val q = query.trim()
     val filtered = allGuides.filter {
-        query.isBlank() ||
-            it.title.contains(query, true) ||
-            it.summary.contains(query, true) ||
-            it.body.contains(query, true)
+        q.isBlank() ||
+            it.title.contains(q, true) ||
+            it.summary.contains(q, true) ||
+            it.body.contains(q, true)
     }
 
     Column(

@@ -214,36 +214,8 @@ fun UserProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            // Barra della Condotta: gradiente Verde (sinistra) → Rosso (destra),
-            // con la porzione verde più ampia. Il cursore è un indicatore
-            // verticale sottile. Sopra, la valutazione a parole (7 livelli).
-            Spacer(Modifier.height(14.dp))
-            val todayFacts by androidx.compose.runtime.produceState(
-                initialValue = 0L to emptyMap<com.guardians.app.model.MacroCategory, Long>(),
-            ) {
-                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val z = java.time.ZoneId.systemDefault()
-                    val start = java.time.LocalDate.now().atStartOfDay(z).toInstant().toEpochMilli()
-                    val now = System.currentTimeMillis()
-                    val perMacro = com.guardians.app.data.UsageAnalytics.perMacroMs(context, start, now)
-                    perMacro.values.sum() to perMacro
-                }
-            }
-            val cursor = com.guardians.app.data.ConductRepository.liveCursor(
-                todayFacts.first, todayFacts.second,
-            )
-            // "good" 0..1: 1 = condotta migliore (verde, a DESTRA della barra).
-            val good = (1f - cursor).coerceIn(0f, 1f)
-            val score = (good * 100f).toInt().coerceIn(0, 100)
-            Text(
-                tr("Stato Condotta: ", "Conduct status: ") + conductRating(score),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                // Stesso colore del punto in cui si trova il cursore sulla barra.
-                color = conductColorAt(good),
-            )
-            Spacer(Modifier.height(6.dp))
-            ConductBar(good)
+            // La Barra della Condotta ora vive SOLO in home (accanto allo
+            // stemma): dal profilo è stata rimossa su richiesta dell'utente.
         }
 
         // ------- solo streak + media storica, con il nuovo lessico esteso
@@ -531,7 +503,7 @@ private fun MetricTile(big: String, label: String, modifier: Modifier = Modifier
 }
 
 /** Il colore del gradiente della barra alla posizione [good] (0=rosso, 1=verde). */
-private fun conductColorAt(good: Float): androidx.compose.ui.graphics.Color {
+internal fun conductColorAt(good: Float): androidx.compose.ui.graphics.Color {
     val red = androidx.compose.ui.graphics.Color(0xFFC62828)
     val amber = androidx.compose.ui.graphics.Color(0xFFF2B01E)
     val green = androidx.compose.ui.graphics.Color(0xFF2E9E5B)
@@ -544,7 +516,7 @@ private fun conductColorAt(good: Float): androidx.compose.ui.graphics.Color {
 }
 
 /** Valutazione a parole della condotta (7 livelli) dal punteggio 0..100. */
-private fun conductRating(score: Int): String = when {
+internal fun conductRating(score: Int): String = when {
     score >= 90 -> tr("Eccellente", "Excellent")
     score >= 75 -> tr("Ottima", "Great")
     score >= 60 -> tr("Buona", "Good")

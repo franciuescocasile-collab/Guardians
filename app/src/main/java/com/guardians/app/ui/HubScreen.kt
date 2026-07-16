@@ -31,7 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -166,14 +166,8 @@ fun HubScreen(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            if (nickname.isBlank()) tr("Ciao!", "Hello!")
-                            else tr("Ciao, $nickname", "Hi, $nickname"),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                        // Mini-barra della condotta + streak, sempre a colpo d'occhio.
+                        // La valutazione della Condotta al posto del saluto: è il
+                        // "voto di reputazione" sempre in vista (10.1).
                         val goalMin = ProfileRepository.dailyGoalMinutes.collectAsState().value
                         val hdr by androidx.compose.runtime.produceState(
                             Triple(0L, emptyMap<com.guardians.app.model.MacroCategory, Long>(), 0),
@@ -196,6 +190,21 @@ fun HubScreen(
                         val streak = hdr.third
                         val good = (1f - com.guardians.app.data.ConductRepository
                             .liveCursor(hdr.first, hdr.second)).coerceIn(0f, 1f)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                tr("Condotta: ", "Conduct: "),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                            )
+                            Text(
+                                conductRating((good * 100).toInt()),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = conductColorAt(good),
+                                maxLines = 1,
+                            )
+                        }
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             MiniConductBar(good, Modifier.weight(1f))
@@ -311,7 +320,9 @@ fun HubScreen(
                 "Group your guardians into folders to manage them together and " +
                     "schedule their days",
             ),
-            icon = Icons.Default.Folder,
+            // Un gruppo di figure insieme: rende l'idea di una squadra di
+            // guardiani molto più della vecchia cartella.
+            icon = Icons.Default.Groups,
             onClick = onOpenTeams,
         )
 

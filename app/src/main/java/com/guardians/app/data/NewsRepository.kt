@@ -29,6 +29,31 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.7.0",
+            "Sagome ritagliate e condotta in prima fila",
+            "Cut-out silhouettes and conduct up front",
+            "Gli elmi dei guardiani ora sono sagome ritagliate (niente più " +
+                "riquadro blu) e con le teste della stessa misura. In home, al " +
+                "posto del saluto, c'è la valutazione della Condotta a colori; la " +
+                "barra è stata tolta dal profilo. Android Auto e la schermata home " +
+                "non contano più nel tempo di utilizzo, e le app \"neutre\" come " +
+                "Google Maps non pesano più sulla condotta: un'ora di navigatore " +
+                "non è dipendenza. L'app resta sempre verticale. Impostazioni " +
+                "riordinate: batteria, sigillo e app escluse in alto, e le " +
+                "preferenze di gusto in una nuova pagina \"Personalizzazione\". " +
+                "Il popup del Congelamento mostra il fiocco di neve, le Squadre " +
+                "hanno un'icona di gruppo e la ricerca ignora gli spazi.",
+            "Guardian helms are now cut-out silhouettes (no more blue box) with " +
+                "evenly sized heads. On home, the greeting gave way to the colored " +
+                "Conduct rating; the bar left the profile. Android Auto and the " +
+                "launcher no longer count as screen time, and \"neutral\" apps like " +
+                "Google Maps no longer weigh on conduct: an hour of navigation " +
+                "isn't addiction. The app stays portrait. Settings reordered: " +
+                "battery, seal and excluded apps on top, taste preferences in a new " +
+                "\"Personalization\" page. The Freeze popup shows a snowflake, " +
+                "Teams got a group icon, and search ignores spaces.",
+        ),
+        NewsItem(
             "3.6.0",
             "I guardiani indossano l'elmo",
             "The guardians don their helms",

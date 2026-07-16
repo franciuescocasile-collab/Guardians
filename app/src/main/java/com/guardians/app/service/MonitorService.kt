@@ -805,7 +805,12 @@ class MonitorService : Service() {
                 )
             }
         }
-        OverlayManager.show(this, timer.type, timer.name, message + "\n\n" + motivationalLine())
+        OverlayManager.show(
+            this, timer.type, timer.name, message + "\n\n" + motivationalLine(),
+            // Durante il Congelamento il popup mostra il FIOCCO DI NEVE, non il
+            // cerchio del Custode: è un incantesimo, non un guardiano.
+            snowflake = timer.id == "incantesimo-congelamento",
+        )
     }
 
     /** Timer sintetico che rappresenta l'Incantesimo di Congelamento nel popup e nelle statistiche. */
@@ -1330,13 +1335,10 @@ class MonitorService : Service() {
      * e la systemui.
      */
     private fun computeExcluded(): Set<String> {
-        val set = mutableSetOf(packageName, "com.android.systemui", "com.android.settings")
-        val pm = packageManager
-        pm.resolveActivity(
-            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
-            PackageManager.MATCH_DEFAULT_ONLY
-        )?.activityInfo?.packageName?.let { set.add(it) }
-        pm.resolveActivity(
+        // Base comune (Guardians, systemui, launcher, ANDROID AUTO)…
+        val set = com.guardians.app.data.UsageAnalytics.ignored(this).toMutableSet()
+        // …più il telefono (emergenze: mai bloccato, mai contato).
+        packageManager.resolveActivity(
             Intent(Intent.ACTION_DIAL),
             PackageManager.MATCH_DEFAULT_ONLY
         )?.activityInfo?.packageName?.let { set.add(it) }

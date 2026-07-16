@@ -44,7 +44,13 @@ object OverlayManager {
     private var appContext: Context? = null
     private val autoHide = Runnable { hideInternal() }
 
-    fun show(context: Context, type: TimerType, title: String, message: String) {
+    fun show(
+        context: Context,
+        type: TimerType,
+        title: String,
+        message: String,
+        snowflake: Boolean = false,
+    ) {
         val app = context.applicationContext
         appContext = app
         vibrateIfEnabled(app)
@@ -55,7 +61,7 @@ object OverlayManager {
             hideInternal()
             val windowManager =
                 app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val root = buildView(app, type, title, message)
+            val root = buildView(app, type, title, message, snowflake)
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -192,6 +198,7 @@ object OverlayManager {
         type: TimerType,
         title: String,
         message: String,
+        snowflake: Boolean = false,
     ): View {
         fun dp(value: Int): Int =
             (value * context.resources.displayMetrics.density).toInt()
@@ -213,7 +220,7 @@ object OverlayManager {
             }
         }
 
-        val shape = ShapeView(context, type)
+        val shape: View = if (snowflake) SnowflakeView(context) else ShapeView(context, type)
         card.addView(shape, LinearLayout.LayoutParams(dp(96), dp(96)))
 
         val titleView = TextView(context).apply {
@@ -499,6 +506,50 @@ object OverlayManager {
                 }
             }
         }
+    }
+}
+
+/**
+ * Fiocco di neve a 6 bracci per il popup del Congelamento (azzurro ghiaccio):
+ * ogni braccio ha due rametti laterali a metà lunghezza.
+ */
+private class SnowflakeView(context: Context) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF9BE7FF.toInt()
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val cx = width / 2f
+        val cy = height / 2f
+        val r = minOf(width, height) * 0.46f
+        paint.strokeWidth = minOf(width, height) * 0.055f
+        for (i in 0 until 6) {
+            val a = Math.toRadians((i * 60).toDouble())
+            val dx = kotlin.math.cos(a).toFloat()
+            val dy = kotlin.math.sin(a).toFloat()
+            // Braccio principale.
+            canvas.drawLine(cx, cy, cx + dx * r, cy + dy * r, paint)
+            // Rametti a 45° dal punto a metà braccio.
+            val midX = cx + dx * r * 0.55f
+            val midY = cy + dy * r * 0.55f
+            val twig = r * 0.28f
+            for (sign in intArrayOf(-1, 1)) {
+                val ta = a + sign * Math.toRadians(40.0)
+                canvas.drawLine(
+                    midX, midY,
+                    midX + (kotlin.math.cos(ta) * twig).toFloat(),
+                    midY + (kotlin.math.sin(ta) * twig).toFloat(),
+                    paint,
+                )
+            }
+        }
+        // Piccolo nucleo centrale.
+        paint.style = Paint.Style.FILL
+        canvas.drawCircle(cx, cy, paint.strokeWidth * 0.9f, paint)
+        paint.style = Paint.Style.STROKE
     }
 }
 

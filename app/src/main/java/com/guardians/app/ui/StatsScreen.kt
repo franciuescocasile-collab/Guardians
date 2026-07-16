@@ -1088,18 +1088,10 @@ private fun loadUsageSummary(context: Context): UsageSummary {
     )
 }
 
-/** App di sistema che non ha senso contare nel tempo di utilizzo. */
-private fun ignoredPackages(context: Context): Set<String> {
-    val set = mutableSetOf(
-        context.packageName,
-        "com.android.systemui",
-        "com.android.settings",
-    )
-    val pm = context.packageManager
-    pm.resolveActivity(
-        android.content.Intent(android.content.Intent.ACTION_MAIN)
-            .addCategory(android.content.Intent.CATEGORY_HOME),
-        PackageManager.MATCH_DEFAULT_ONLY,
-    )?.activityInfo?.packageName?.let { set.add(it) }
-    return set
-}
+/**
+ * App di sistema che non ha senso contare nel tempo di utilizzo. Delega alla
+ * lista unica di UsageAnalytics (che esclude anche ANDROID AUTO e il launcher),
+ * così tutti i conteggi dell'app usano le stesse regole.
+ */
+private fun ignoredPackages(context: Context): Set<String> =
+    com.guardians.app.data.UsageAnalytics.ignored(context)

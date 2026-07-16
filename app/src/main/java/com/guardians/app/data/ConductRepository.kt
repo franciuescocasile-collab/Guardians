@@ -37,7 +37,7 @@ object ConductRepository {
     // Aumenta questo numero quando i coefficienti cambiano abbastanza da voler
     // ripartire con una condotta pulita (evita che vecchi valori "sporchi" da
     // test restino incollati al rosso col motore nuovo, più indulgente).
-    private const val CURRENT_CALIBRATION = 2
+    private const val CURRENT_CALIBRATION = 3
 
     /** Valore interno 0..100 (100 = massimo verde). Mai mostrato come numero. */
     private val _conduct = MutableStateFlow(ConductConfig.START_VALUE)
@@ -150,9 +150,15 @@ object ConductRepository {
         // Base: il valore interno 0..100 → 0(verde)..1(rosso).
         var pos = (1.0 - _conduct.value / 100.0).coerceIn(0.0, 1.0)
 
+        // Il tempo "neutro" (UTILITY: mappe/navigazione, messaggi, utilità — peso
+        // 0) NON conta per la condotta: un'ora di Google Maps per guidare non è
+        // dipendenza. Il veto salute guarda solo il tempo che pesa davvero.
+        val neutralMs = todayPerMacro[MacroCategory.UTILITY] ?: 0L
+        val relevantMs = (todayTotalMs - neutralMs).coerceAtLeast(0L)
+
         // Veto Biologico: eccesso oltre la soglia salute spinge verso l'arancione,
         // ma con mano leggera (spalmato su +4h, non +3h, e con pendenza ridotta).
-        val overHealth = (todayTotalMs - ConductConfig.HEALTH_CEILING_MS).coerceAtLeast(0L)
+        val overHealth = (relevantMs - ConductConfig.HEALTH_CEILING_MS).coerceAtLeast(0L)
         if (overHealth > 0L) {
             val f = (overHealth.toDouble() / (4L * 3_600_000L)).coerceIn(0.0, 1.0)
             pos += (1.0 - pos) * 0.35 * f
@@ -199,10 +205,15 @@ object ConductRepository {
         val prodMs = (perMacro[MacroCategory.PRODUTTIVITA] ?: 0L) +
             (perMacro[MacroCategory.UTILITY] ?: 0L)
 
+        // Il tempo "neutro" (UTILITY, peso 0: mappe, messaggi, utilità) non pesa
+        // sulla condotta nemmeno nel rollover di fine giornata.
+        val neutralMs = perMacro[MacroCategory.UTILITY] ?: 0L
+        val relevantMs = (totalMs - neutralMs).coerceAtLeast(0L)
+
         // Zona di sforamento: oltre l'obiettivo personale O oltre il veto salute.
         val ceiling = if (goalMs > 0L) minOf(goalMs, ConductConfig.HEALTH_CEILING_MS)
         else ConductConfig.HEALTH_CEILING_MS
-        val overMs = (totalMs - ceiling).coerceAtLeast(0L)
+        val overMs = (relevantMs - ceiling).coerceAtLeast(0L)
         var clean = true
 
         if (overMs > 0L) {

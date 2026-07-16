@@ -13,11 +13,30 @@ import com.guardians.app.model.categoryOf
  */
 object UsageAnalytics {
 
-    /** App di sistema da non contare mai. */
-    private fun ignored(context: Context): Set<String> {
+    /**
+     * App di sistema da non contare mai: Guardians stesso, la UI di sistema,
+     * ANDROID AUTO (va in primo piano da solo quando colleghi l'auto: non è
+     * tempo passato al telefono) e il LAUNCHER (la schermata home non è "uso"
+     * — anche Digital Wellbeing la esclude).
+     */
+    fun ignored(context: Context): Set<String> {
         val set = mutableSetOf(
             context.packageName, "com.android.systemui", "com.android.settings",
+            // Android Auto e proiezione in macchina.
+            "com.google.android.projection.gearhead",
+            "com.google.android.apps.automotive.templates.host",
+            // Launcher più comuni (ripiego se il resolver non risponde).
+            "com.sec.android.app.launcher", "com.google.android.apps.nexuslauncher",
         )
+        // Il VERO launcher predefinito del telefono, chiesto al sistema.
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_HOME)
+            context.packageManager
+                .resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName?.let { set.add(it) }
+        } catch (_: Exception) {
+        }
         return set
     }
 

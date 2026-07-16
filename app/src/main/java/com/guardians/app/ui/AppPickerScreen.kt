@@ -128,8 +128,11 @@ fun AppPickerScreen(
                     CircularProgressIndicator()
                 }
             } else {
+                // Gli spazi ai bordi non devono rompere la ricerca ("maps " deve
+                // trovare Maps): il confronto usa la query ripulita.
+                val q = query.trim()
                 val filtered = list.filter {
-                    query.isBlank() || it.label.contains(query, ignoreCase = true)
+                    q.isBlank() || it.label.contains(q, ignoreCase = true)
                 }
                 // "Seleziona tutte" agisce sulle app elencate (quindi rispetta la ricerca).
                 val allSelected = filtered.isNotEmpty() &&
