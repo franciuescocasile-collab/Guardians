@@ -3,6 +3,7 @@ package com.guardians.app.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,8 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -50,6 +49,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,6 +61,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /** Periodo mostrato nel 2° livello delle Statistiche. */
 enum class StatsPeriod { WEEK, MONTH, YEAR }
@@ -109,9 +110,19 @@ fun last7DaysSeries(history: Map<String, Long>): List<Pair<String, Long>> {
     }
 }
 
-/** Le ultime ~5 settimane (media giornaliera), etichettate con la data di fine. */
+/**
+ * Le ultime ~5 settimane (media giornaliera), etichettate "S1".."S52/53":
+ * il numero della settimana nell'anno (S1 = la prima di gennaio), che si
+ * azzera a ogni anno nuovo. Rispetta il primo giorno scelto (lun/dom).
+ */
 fun weeksSeries(history: Map<String, Long>): List<Pair<String, Long>> {
     val today = LocalDate.now()
+    val firstDow = if (com.guardians.app.data.SettingsRepository.weekStartMonday.value) {
+        java.time.DayOfWeek.MONDAY
+    } else {
+        java.time.DayOfWeek.SUNDAY
+    }
+    val weekFields = java.time.temporal.WeekFields.of(firstDow, 1)
     return (4 downTo 0).map { w ->
         val end = today.minusWeeks(w.toLong())
         val start = end.minusDays(6)
@@ -119,8 +130,7 @@ fun weeksSeries(history: Map<String, Long>): List<Pair<String, Long>> {
             history[start.plusDays(i.toLong()).toString()]
         }
         val avg = if (days.isEmpty()) 0L else days.sum() / days.size
-        // Etichetta chiara: "sett. del d/M" abbreviata in "d/M".
-        "${end.dayOfMonth}/${end.monthValue}" to avg
+        "S${end.get(weekFields.weekOfYear())}" to avg
     }
 }
 
@@ -280,26 +290,22 @@ fun StatsTimeDetail(onBack: () -> Unit) {
         }
 
         // ---------------------------------------------- carosello dei grafici
+        // Giornaliero = LINEA interattiva (tocca un pallino per il dettaglio);
+        // Settimanale, Mensile e Annuale = BARRE. Le linguette sono cliccabili
+        // oltre allo swipe.
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(16.dp)) {
                 val titles = listOf(
                     tr("Giornaliero", "Daily"),
                     tr("Settimanale", "Weekly"),
                     tr("Mensile", "Monthly"),
+                    tr("Annuale", "Yearly"),
                 )
-                val pager = rememberPagerState(pageCount = { 3 })
-                var lineView by remember { mutableStateOf(true) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        tr("Andamento", "Trend"),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // Toggle SEGMENTATO barre/linea: si capisce che è un pulsante.
-                    ChartTypeToggle(lineView) { lineView = it }
-                }
+                val pager = rememberPagerState(pageCount = { 4 })
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                Text(tr("Andamento", "Trend"), fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     titles.forEachIndexed { i, t ->
                         Text(
                             t,
@@ -308,27 +314,32 @@ fun StatsTimeDetail(onBack: () -> Unit) {
                             else FontWeight.Normal,
                             color = if (pager.currentPage == i) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.clickable {
+                                scope.launch { pager.animateScrollToPage(i) }
+                            },
                         )
                     }
                 }
                 Spacer(Modifier.height(12.dp))
                 HorizontalPager(state = pager) { page ->
-                    val series = when (page) {
-                        0 -> hourlySeries(context)          // ultime 24 ore
-                        1 -> last7DaysSeries(history)        // ultimi 7 giorni
-                        else -> weeksSeries(history)         // ultime settimane
+                    when (page) {
+                        // Ore di oggi, 00 → 23 (la fascia 23-00 è l'ULTIMO punto
+                        // a destra). Tocca un pallino per il minutaggio dell'ora.
+                        0 -> HourLineChart(hourlySeries(context))
+                        1 -> PeriodBarChart(last7DaysSeries(history), 0L)
+                        2 -> PeriodBarChart(weeksSeries(history), 0L)
+                        else -> PeriodBarChart(yearlySeries(history), 0L)
                     }
-                    if (lineView) LineChart(series) else PeriodBarChart(series, 0L)
                 }
                 Spacer(Modifier.height(10.dp))
-                // Page indicators: 3 cerchi, quello attivo più grande e illuminato.
+                // Page indicators: 4 cerchi, quello attivo più grande e illuminato.
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Spacer(Modifier.weight(1f))
-                    for (i in 0 until 3) {
+                    for (i in 0 until 4) {
                         val active = pager.currentPage == i
                         Box(
                             Modifier
@@ -365,7 +376,8 @@ fun StatsTimeDetail(onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(12.dp))
                 var shownMonth by remember { mutableStateOf(YearMonth.now()) }
-                GoalCalendar(snapshots, shownMonth) { shownMonth = it }
+                val goalMin = ProfileRepository.dailyGoalMinutes.collectAsState().value
+                GoalCalendar(snapshots, history, goalMin, shownMonth) { shownMonth = it }
             }
         }
     }
@@ -386,99 +398,124 @@ private fun NoDataYet() {
     }
 }
 
-/** Toggle segmentato barre/linea: una pillola con due icone, l'attiva evidenziata. */
-@Composable
-private fun ChartTypeToggle(lineView: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(50),
-            )
-            .padding(3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        listOf(false to Icons.Filled.BarChart, true to Icons.Filled.ShowChart).forEach { (line, icon) ->
-            val active = lineView == line
-            Box(
-                modifier = Modifier
-                    .clickable { onChange(line) }
-                    .background(
-                        if (active) MaterialTheme.colorScheme.primary
-                        else Color.Transparent,
-                        RoundedCornerShape(50),
-                    )
-                    .padding(horizontal = 12.dp, vertical = 5.dp),
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = if (line) tr("Linea", "Line") else tr("Barre", "Bars"),
-                    tint = if (active) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
 
-/** Grafico a linea MORBIDA (curve) che segue l'andamento. */
+/**
+ * Grafico a LINEA delle ore di oggi (00 → 23; la fascia 23-00 è l'ultimo punto
+ * a destra). Curve morbide e PALLINI TOCCABILI: un tocco mostra il commentino
+ * con il minutaggio di quell'ora (uno solo alla volta; ritocca per chiudere).
+ */
 @Composable
-private fun LineChart(series: List<Pair<String, Long>>) {
+private fun HourLineChart(series: List<Pair<String, Long>>) {
     if (series.isEmpty()) return
     if (series.all { it.second <= 0L }) { NoDataYet(); return }
     val maxMs = series.maxOf { it.second }.coerceAtLeast(1L)
     val lineColor = MaterialTheme.colorScheme.primary
     val fillColor = lineColor.copy(alpha = 0.15f)
+    val n = series.size
+    val chartH = 150.dp
+    var selected by remember { mutableStateOf<Int?>(null) }
     Column {
-        Canvas(
+        androidx.compose.foundation.layout.BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
-                .height(140.dp)
+                .height(chartH),
         ) {
-            val n = series.size
-            if (n < 2) return@Canvas
-            val stepX = size.width / (n - 1)
-            // Padding inferiore: la linea dello zero non deve toccare il bordo.
-            val bottomPad = size.height * 0.12f
-            val topPad = size.height * 0.10f
-            val usable = size.height - bottomPad - topPad
-            fun pt(i: Int): Offset {
+            val wPx = constraints.maxWidth.toFloat()
+            val hPx = with(androidx.compose.ui.platform.LocalDensity.current) { chartH.toPx() }
+            // Stessa geometria per disegno, tocchi e posizione del commentino.
+            val stepX = wPx / (n - 1).coerceAtLeast(1)
+            val bottomPad = hPx * 0.12f
+            val topPad = hPx * 0.10f
+            val usable = hPx - bottomPad - topPad
+            fun pointAt(i: Int): Offset {
                 val v = series[i].second.toFloat() / maxMs.toFloat()
                 return Offset(stepX * i, topPad + usable * (1f - v.coerceIn(0f, 1f)))
             }
-            val pts = (0 until n).map { pt(it) }
-            // Curva morbida di Catmull-Rom convertita in bezier cubica.
-            fun buildSmooth(path: Path) {
-                path.moveTo(pts[0].x, pts[0].y)
-                for (i in 0 until n - 1) {
-                    val p0 = pts[if (i - 1 < 0) 0 else i - 1]
-                    val p1 = pts[i]
-                    val p2 = pts[i + 1]
-                    val p3 = pts[if (i + 2 >= n) n - 1 else i + 2]
-                    val c1x = p1.x + (p2.x - p0.x) / 6f
-                    val c1y = p1.y + (p2.y - p0.y) / 6f
-                    val c2x = p2.x - (p3.x - p1.x) / 6f
-                    val c2y = p2.y - (p3.y - p1.y) / 6f
-                    path.cubicTo(c1x, c1y, c2x, c2y, p2.x, p2.y)
+
+            Canvas(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(n, maxMs) {
+                        detectTapGestures { off ->
+                            val idx = kotlin.math.round(off.x / stepX).toInt().coerceIn(0, n - 1)
+                            selected = if (selected == idx) null else idx
+                        }
+                    },
+            ) {
+                if (n < 2) return@Canvas
+                val pts = (0 until n).map { pointAt(it) }
+                // Curva morbida di Catmull-Rom convertita in bezier cubica.
+                fun buildSmooth(path: Path) {
+                    path.moveTo(pts[0].x, pts[0].y)
+                    for (i in 0 until n - 1) {
+                        val p0 = pts[if (i - 1 < 0) 0 else i - 1]
+                        val p1 = pts[i]
+                        val p2 = pts[i + 1]
+                        val p3 = pts[if (i + 2 >= n) n - 1 else i + 2]
+                        val c1x = p1.x + (p2.x - p0.x) / 6f
+                        val c1y = p1.y + (p2.y - p0.y) / 6f
+                        val c2x = p2.x - (p3.x - p1.x) / 6f
+                        val c2y = p2.y - (p3.y - p1.y) / 6f
+                        path.cubicTo(c1x, c1y, c2x, c2y, p2.x, p2.y)
+                    }
+                }
+                val fill = Path().apply {
+                    buildSmooth(this)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(fill, fillColor)
+                drawPath(Path().apply { buildSmooth(this) }, lineColor, style = Stroke(width = 5f))
+                // Puntini; quello selezionato è evidenziato con un anello.
+                pts.forEachIndexed { i, p ->
+                    if (i == selected) {
+                        drawCircle(lineColor.copy(alpha = 0.35f), radius = 14f, center = p)
+                        drawCircle(lineColor, radius = 7f, center = p)
+                    } else {
+                        drawCircle(lineColor, radius = 5f, center = p)
+                    }
                 }
             }
-            // Riempimento sotto la curva.
-            val fill = Path().apply {
-                buildSmooth(this)
-                lineTo(size.width, size.height)
-                lineTo(0f, size.height)
-                close()
+
+            // Il commentino sopra il pallino toccato (uno solo alla volta).
+            val sel = selected
+            if (sel != null) {
+                val p = pointAt(sel)
+                val hour = series[sel].first.toIntOrNull() ?: sel
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val tipW = with(density) { 128.dp.toPx() }
+                val tipH = with(density) { 48.dp.toPx() }
+                val x = (p.x - tipW / 2f).coerceIn(0f, (wPx - tipW).coerceAtLeast(0f))
+                val y = (p.y - tipH - 14f).coerceAtLeast(0f)
+                Card(
+                    onClick = { selected = null },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    ),
+                    modifier = Modifier.offset {
+                        androidx.compose.ui.unit.IntOffset(x.toInt(), y.toInt())
+                    },
+                ) {
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+                        Text(
+                            "%02d:00–%02d:00".format(hour, (hour + 1) % 24),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                        )
+                        Text(
+                            formatMs(series[sel].second),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                        )
+                    }
+                }
             }
-            drawPath(fill, fillColor)
-            // La curva.
-            val line = Path().apply { buildSmooth(this) }
-            drawPath(line, lineColor, style = Stroke(width = 5f))
-            // Puntini sui vertici.
-            for (p in pts) drawCircle(lineColor, radius = 5f, center = p)
         }
         Spacer(Modifier.height(4.dp))
-        // Etichette asse X: mostro un sottoinsieme per non affollare (max ~7).
-        val n = series.size
+        // Etichette asse X: un sottoinsieme per non affollare; l'ultima è
+        // sempre "23" (la fascia 23-00, a destra come richiesto).
         val stepLabel = ((n + 6) / 7).coerceAtLeast(1)
         Row(modifier = Modifier.fillMaxWidth()) {
             series.forEachIndexed { i, (label, _) ->
@@ -496,15 +533,89 @@ private fun LineChart(series: List<Pair<String, Long>>) {
     }
 }
 
-/** Griglia mensile con i pallini verdi/rossi; navigabile per mese. */
+/**
+ * Il commentino di un giorno del calendario: uso, obiettivo e SOLO UNA tra
+ * "hai sforato di" e "sei sotto l'obiettivo di" (mai entrambe).
+ */
+@Composable
+private fun DayTooltip(
+    date: LocalDate,
+    usageMs: Long?,
+    goalMinutes: Int,
+    onClose: () -> Unit,
+) {
+    Card(
+        onClick = onClose,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.inverseSurface,
+        ),
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                "${date.dayOfMonth}/${date.monthValue}/${date.year}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f),
+            )
+            if (usageMs == null) {
+                Text(
+                    tr("Nessun dato registrato", "No data recorded"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+            } else {
+                Text(
+                    tr("Uso: ", "Usage: ") + formatMs(usageMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                )
+                if (goalMinutes > 0) {
+                    val goalMs = goalMinutes * 60_000L
+                    Text(
+                        tr("Obiettivo: ", "Goal: ") + formatMs(goalMs),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                    )
+                    val diff = usageMs - goalMs
+                    if (diff > 0L) {
+                        Text(
+                            tr("Hai sforato di ", "You went over by ") + formatMs(diff),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE57373),
+                        )
+                    } else {
+                        Text(
+                            tr("Sei sotto l'obiettivo di ", "You're under the goal by ") +
+                                formatMs(-diff),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF66BB6A),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Griglia mensile con i pallini verdi/rossi; navigabile per mese. Toccando un
+ * giorno appare un commentino (17) con uso, obiettivo e di quanto hai sforato
+ * O di quanto sei sotto (mai entrambi). Un solo commentino alla volta.
+ */
 @Composable
 private fun GoalCalendar(
     snapshots: Map<String, Boolean>,
+    history: Map<String, Long>,
+    goalMinutes: Int,
     ym: YearMonth,
     onMonthChange: (YearMonth) -> Unit,
 ) {
     val context = LocalContext.current
     val today = LocalDate.now()
+    // Il giorno selezionato (chiave ISO): tocca di nuovo per chiudere.
+    var selectedDay by remember { mutableStateOf<String?>(null) }
     val locale = if (com.guardians.app.data.SettingsRepository.english.value) Locale.ENGLISH
     else Locale.ITALIAN
     // Intestazione: frecce mese + titolo cliccabile (Month/Year picker rapido).
@@ -584,7 +695,11 @@ private fun GoalCalendar(
                             val date = ym.atDay(dayNum).toString()
                             val under = snapshots[date]
                             Box(
-                                Modifier.size(30.dp),
+                                Modifier
+                                    .size(30.dp)
+                                    .clickable {
+                                        selectedDay = if (selectedDay == date) null else date
+                                    },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (under != null) {
@@ -608,6 +723,24 @@ private fun GoalCalendar(
                                         null -> MaterialTheme.colorScheme.onSurfaceVariant
                                     },
                                 )
+                                // Il commentino del giorno (come la "i" del profilo).
+                                if (selectedDay == date) {
+                                    androidx.compose.ui.window.Popup(
+                                        alignment = Alignment.TopCenter,
+                                        offset = androidx.compose.ui.unit.IntOffset(0, -190),
+                                        onDismissRequest = { selectedDay = null },
+                                        properties = androidx.compose.ui.window.PopupProperties(
+                                            focusable = false,
+                                        ),
+                                    ) {
+                                        DayTooltip(
+                                            date = ym.atDay(dayNum),
+                                            usageMs = history[date],
+                                            goalMinutes = goalMinutes,
+                                            onClose = { selectedDay = null },
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

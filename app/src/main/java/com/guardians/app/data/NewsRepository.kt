@@ -29,6 +29,32 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.9.0",
+            "I grafici rifatti come si deve",
+            "Charts redone properly",
+            "Il grafico \"Tempo al telefono\" è nuovo: barre colorate più alte e " +
+                "tre guide in scala di grigio — la media di QUEL giorno della " +
+                "settimana (linea con tratteggio sotto), la media generale " +
+                "(tratteggiata) e l'obiettivo (continua) — con la legenda. I " +
+                "pulsanti Mese/Anno sono spariti: tutto vive nel Dettaglio, dove " +
+                "il carosello ha ora 4 grafici (Giornaliero a linea con pallini " +
+                "TOCCABILI che mostrano i minuti dell'ora, Settimanale, Mensile " +
+                "con le settimane S1…S52 e Annuale) e le linguette si cliccano " +
+                "oltre allo swipe. Nel calendario dell'obiettivo, tocca un giorno " +
+                "per vedere uso, obiettivo e di quanto hai sforato o sei sotto. " +
+                "E il Messaggero e la Vedetta hanno i loro nuovi elmi.",
+            "The \"Screen time\" chart is new: taller colored bars plus three " +
+                "grayscale guides — THAT weekday's average (line with hatching " +
+                "below), the overall average (dashed) and the goal (solid) — with " +
+                "a legend. The Month/Year buttons are gone: everything lives in " +
+                "Details, where the carousel now has 4 charts (Daily as a line " +
+                "with TAPPABLE dots showing each hour's minutes, Weekly, Monthly " +
+                "with S1…S52 weeks and Yearly) and the tabs are clickable besides " +
+                "swiping. In the goal calendar, tap a day to see usage, goal and " +
+                "how much you went over or stayed under. And the Messenger and " +
+                "Lookout got their new helms.",
+        ),
+        NewsItem(
             "3.8.0",
             "Sonno, homepage su misura e vetro ghiacciato",
             "Sleep, tailored home and frosted glass",

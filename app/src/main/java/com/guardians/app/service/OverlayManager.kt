@@ -553,7 +553,7 @@ private class SnowflakeView(context: Context) : View(context) {
     }
 }
 
-/** Il PNG dell'elmo per il tipo, o null (Messaggero → forma disegnata). */
+/** Il PNG dell'elmo per il tipo (ora TUTTI i guardiani hanno il proprio). */
 private fun guardianOverlayDrawable(type: TimerType): Int? = when (type) {
     TimerType.SENTINELLA -> com.guardians.app.R.drawable.guardian_sentinella
     TimerType.GUARDIANO -> com.guardians.app.R.drawable.guardian_guardiano
@@ -562,5 +562,5 @@ private fun guardianOverlayDrawable(type: TimerType): Int? = when (type) {
     TimerType.VEDETTA -> com.guardians.app.R.drawable.guardian_vedetta
     TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
     TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
-    TimerType.MESSAGGERO -> null
+    TimerType.MESSAGGERO -> com.guardians.app.R.drawable.guardian_messaggero
 }

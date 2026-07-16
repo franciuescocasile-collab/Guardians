@@ -99,7 +99,7 @@ fun TimerShapeIcon(type: TimerType, modifier: Modifier = Modifier) {
     }
 }
 
-/** Il PNG dell'elmo per il tipo, o null se non c'è (Messaggero → forma). */
+/** Il PNG dell'elmo per il tipo (ora TUTTI i guardiani hanno il proprio). */
 private fun guardianDrawable(type: TimerType): Int? = when (type) {
     TimerType.SENTINELLA -> com.guardians.app.R.drawable.guardian_sentinella
     TimerType.GUARDIANO -> com.guardians.app.R.drawable.guardian_guardiano
@@ -108,7 +108,7 @@ private fun guardianDrawable(type: TimerType): Int? = when (type) {
     TimerType.VEDETTA -> com.guardians.app.R.drawable.guardian_vedetta
     TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
     TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
-    TimerType.MESSAGGERO -> null
+    TimerType.MESSAGGERO -> com.guardians.app.R.drawable.guardian_messaggero
 }
 
 /** Esagono (punta in alto) inscritto nell'area [w]×[h] (usato dall'Esattore). */
