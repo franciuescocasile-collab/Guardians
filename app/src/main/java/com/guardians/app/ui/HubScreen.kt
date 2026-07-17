@@ -28,7 +28,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
@@ -60,6 +61,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -197,31 +199,35 @@ fun HubScreen(
                         val streak = hdr.third
                         val good = (1f - com.guardians.app.data.ConductRepository
                             .liveCursor(hdr.first, hdr.second)).coerceIn(0f, 1f)
+                        // La scritta STA SOPRA la barra, stessa larghezza (9); il
+                        // fuoco a destra è alto quanto scritta+barra insieme.
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                tr("Condotta: ", "Conduct: "),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                            )
-                            Text(
-                                conductRating((good * 100).toInt()),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = conductColorAt(good),
-                                maxLines = 1,
-                            )
-                        }
-                        Spacer(Modifier.height(1.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            MiniConductBar(good, Modifier.weight(1f))
-                            Spacer(Modifier.width(8.dp))
-                            StreakFlame(streak)
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        tr("Condotta: ", "Conduct: "),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                    )
+                                    Text(
+                                        conductRating((good * 100).toInt()),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = conductColorAt(good),
+                                        maxLines = 1,
+                                    )
+                                }
+                                Spacer(Modifier.height(3.dp))
+                                MiniConductBar(good, Modifier.fillMaxWidth())
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            StreakFlame(streak, Modifier.size(46.dp))
                         }
                     }
                 }
-                // La campanella delle novità: il pallino segnala annunci non letti.
-                IconButton(onClick = onOpenNews) {
+                // Campanella e ingranaggio vicini (10): tocchi più stretti (40dp).
+                IconButton(onClick = onOpenNews, modifier = Modifier.size(40.dp)) {
                     BadgedBox(
                         badge = { if (unreadNews > 0) Badge() },
                     ) {
@@ -232,8 +238,9 @@ fun HubScreen(
                         )
                     }
                 }
+                Spacer(Modifier.width(2.dp))
                 // Le Impostazioni si aprono da qui: niente card dedicata in lista.
-                IconButton(onClick = onOpenSettings) {
+                IconButton(onClick = onOpenSettings, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.Default.Settings,
                         contentDescription = tr("Impostazioni", "Settings"),
@@ -290,7 +297,6 @@ fun HubScreen(
         val hiddenCards by com.guardians.app.data.HomeConfigRepository.hidden.collectAsState()
         var homeEdit by remember { mutableStateOf(false) }
         var confirmHideSleep by remember { mutableStateOf(false) }
-        var showAddCards by remember { mutableStateOf(false) }
 
         if (confirmHideSleep) {
             androidx.compose.material3.AlertDialog(
@@ -331,58 +337,22 @@ fun HubScreen(
             )
         }
 
-        if (showAddCards) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showAddCards = false },
-                title = { Text(tr("Aggiungi una card", "Add a card")) },
-                text = {
-                    Column {
-                        if (hiddenCards.isEmpty()) {
-                            Text(
-                                tr(
-                                    "Tutte le card sono già in home.",
-                                    "All cards are already on home.",
-                                ),
-                            )
-                        }
-                        hiddenCards.forEach { key ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                            ) {
-                                Text(
-                                    com.guardians.app.data.HomeConfigRepository
-                                        .displayName(key),
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                androidx.compose.material3.TextButton(
-                                    onClick = {
-                                        com.guardians.app.data.HomeConfigRepository
-                                            .setHidden(context, key, false)
-                                    },
-                                ) { Text(tr("Aggiungi", "Add")) }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(
-                        onClick = { showAddCards = false },
-                    ) { Text(tr("Chiudi", "Close")) }
-                },
-            )
-        }
-
         if (homeEdit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    tr("Sistema la tua home", "Arrange your home"),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Sistema la tua home", "Arrange your home"),
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        tr(
+                            "Trascina ≡ per spostare, spegni per disattivare",
+                            "Drag ≡ to move, switch off to disable",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 androidx.compose.material3.TextButton(onClick = { homeEdit = false }) {
                     Text(tr("Fatto", "Done"), fontWeight = FontWeight.Bold)
                 }
@@ -390,21 +360,26 @@ fun HubScreen(
         }
 
         for (cardKey in cardOrder) {
-            if (cardKey in hiddenCards) continue
+            val isOff = cardKey in hiddenCards
+            // Fuori dalla modifica modifica, le card disattivate non si vedono;
+            // in modifica ci sono TUTTE (le spente restano lì, grigie, con lo
+            // switch, così le puoi riaccendere) — 7.
+            if (!homeEdit && isOff) continue
             HomeEditableRow(
                 cardKey = cardKey,
                 editMode = homeEdit,
+                active = !isOff,
                 hideable = cardKey in com.guardians.app.data.HomeConfigRepository.HIDEABLE,
                 onDragMove = { delta ->
                     com.guardians.app.data.HomeConfigRepository
-                        .moveVisible(context, cardKey, delta)
+                        .move(context, cardKey, delta)
                 },
-                onHide = {
-                    if (cardKey == com.guardians.app.data.HomeConfigRepository.CARD_SLEEP) {
+                onToggleActive = { on ->
+                    if (!on && cardKey == com.guardians.app.data.HomeConfigRepository.CARD_SLEEP) {
                         confirmHideSleep = true
                     } else {
                         com.guardians.app.data.HomeConfigRepository
-                            .setHidden(context, cardKey, true)
+                            .setHidden(context, cardKey, !on)
                     }
                 },
             ) {
@@ -446,9 +421,9 @@ fun HubScreen(
                                 tr("Telefono congelato ancora per ", "Phone frozen for ") +
                                     formatMs((freezeUntil - nowMs).coerceAtLeast(1000L))
                             freezeUntil > 0L && freezeOvertime ->
-                                tr("Oltre il tempo: +", "Past time: +") +
+                                tr("Oltre il tempo: più ", "Past the time: ") +
                                     formatMs((nowMs - freezeUntil).coerceAtLeast(1000L)) +
-                                    tr(" — grande!", " — great!")
+                                    tr(" — grande!", " more — great!")
                             else -> tr(
                                 "Isolamento totale: decidi tu quanto stare lontano dal telefono",
                                 "Total isolation: you decide how long to stay off the phone",
@@ -522,34 +497,29 @@ fun HubScreen(
             }
             }
         }
-
-        // "Aggiungi una card": appare quando qualche sezione è nascosta (2).
-        if (hiddenCards.isNotEmpty()) {
-            HubCard(
-                title = tr("Aggiungi una card", "Add a card"),
-                subtitle = tr(
-                    "Rimetti in home le sezioni nascoste",
-                    "Bring hidden sections back to home",
-                ),
-                icon = Icons.Default.Add,
-                onClick = { showAddCards = true },
-            )
-        }
     }
 }
 
 /**
- * Una riga della home in modalità "sistema" (2): a sinistra le TRE LINEETTE
- * da trascinare per spostare la card, a destra lo switch per nasconderla
- * (solo per le card non essenziali). Fuori dalla modalità, la card è nuda.
+ * Vera in modalità "sistema la home": le HubCard la leggono per NASCONDERE la
+ * freccia ">" e disattivare il click (6), così non si entra nelle pagine.
+ */
+val LocalHomeEditMode = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/**
+ * Una riga della home in modalità "sistema": a sinistra le TRE LINEETTE da
+ * trascinare per spostare la card, a destra lo switch per attivarla/disattivarla
+ * (solo le non essenziali). Le disattivate restano visibili ma sbiadite (7).
+ * Fuori dalla modalità, la card è nuda.
  */
 @Composable
 private fun HomeEditableRow(
     cardKey: String,
     editMode: Boolean,
+    active: Boolean,
     hideable: Boolean,
     onDragMove: (Int) -> Unit,
-    onHide: () -> Unit,
+    onToggleActive: (Boolean) -> Unit,
     content: @Composable () -> Unit,
 ) {
     if (!editMode) {
@@ -557,26 +527,28 @@ private fun HomeEditableRow(
         return
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // Accumulo continuo: trascinando di più scavalchi più card (5).
         var acc by remember(cardKey) { mutableStateOf(0f) }
         Icon(
             Icons.Default.DragHandle,
             contentDescription = tr("Trascina per spostare", "Drag to move"),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
-                .size(30.dp)
+                .size(34.dp)
                 .pointerInput(cardKey) {
-                    detectDragGestures(
+                    detectVerticalDragGestures(
                         onDragEnd = { acc = 0f },
                         onDragCancel = { acc = 0f },
-                    ) { change, amount ->
+                    ) { change, dy ->
                         change.consume()
-                        acc += amount.y
-                        val step = 84.dp.toPx()
-                        while (acc > step) {
+                        acc += dy
+                        // Passo = mezza altezza di una card: scorrimento fluido.
+                        val step = 44.dp.toPx()
+                        while (acc >= step) {
                             onDragMove(1)
                             acc -= step
                         }
-                        while (acc < -step) {
+                        while (acc <= -step) {
                             onDragMove(-1)
                             acc += step
                         }
@@ -584,10 +556,21 @@ private fun HomeEditableRow(
                 },
         )
         Spacer(Modifier.width(8.dp))
-        Box(Modifier.weight(1f)) { content() }
+        Box(
+            Modifier
+                .weight(1f)
+                .alpha(if (active) 1f else 0.4f),
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalHomeEditMode provides true,
+            ) { content() }
+        }
         if (hideable) {
             Spacer(Modifier.width(8.dp))
-            Switch(checked = true, onCheckedChange = { onHide() })
+            Switch(checked = active, onCheckedChange = { onToggleActive(it) })
+        } else {
+            // Le essenziali non si spengono: spazio per allineare le righe.
+            Spacer(Modifier.width(52.dp))
         }
     }
 }
@@ -601,35 +584,69 @@ private fun plural(n: Int, one: String, many: String): String =
  * GRANDE e con il numero dei giorni di fila DENTRO il corpo della fiamma.
  */
 @Composable
-private fun StreakFlame(streak: Int) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(46.dp)) {
-        Icon(
-            Icons.Default.LocalFireDepartment,
-            contentDescription = tr(
-                "$streak giorni di fila sotto l'obiettivo",
-                "$streak days in a row under the goal",
+private fun StreakFlame(streak: Int, modifier: Modifier = Modifier) {
+    val outline = Color(0xFFFF7A2E)   // contorno arancione fiamma
+    val number = Color(0xFFFFB74D)    // numero, arancione più chiaro per leggerlo
+    // Fuoco IN MOVIMENTO: la punta guizza e la fiamma "respira" (8).
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "flame")
+    val flick by t.animateFloat(
+        initialValue = -1f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                820, easing = androidx.compose.animation.core.FastOutSlowInEasing,
             ),
-            tint = Color(0xFFFF8A3C),
-            modifier = Modifier.size(46.dp),
-        )
-        // Il numero su una MEDAGLIETTA scura dentro la fiamma: contrasto
-        // garantito, qualunque sia lo sfondo (prima si perdeva nell'arancione).
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .padding(top = 12.dp)
-                .size(20.dp)
-                .background(Color(0xE6221407), CircleShape),
-        ) {
-            Text(
-                streak.toString(),
-                fontSize = androidx.compose.ui.unit.TextUnit(
-                    11f, androidx.compose.ui.unit.TextUnitType.Sp,
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "flick",
+    )
+    val breathe by t.animateFloat(
+        initialValue = 0.93f, targetValue = 1.07f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                640, easing = androidx.compose.animation.core.FastOutSlowInEasing,
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "breathe",
+    )
+    Box(contentAlignment = Alignment.Center, modifier = modifier) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val cx = w / 2f
+            val tipX = cx + flick * w * 0.10f
+            val topY = h * (0.14f - (breathe - 1f) * 0.4f)   // la punta sale/scende
+            val baseY = h * 0.92f
+            val midY = h * 0.56f
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(cx, baseY)
+                // lato sinistro, sale a punta
+                cubicTo(w * 0.06f, midY + 6f, w * 0.24f, midY, tipX, topY)
+                // spalla e discesa a destra
+                cubicTo(w * 0.76f, midY, w * 0.94f, midY + 6f, cx, baseY)
+                close()
+            }
+            // Riempimento tenue + contorno SOTTILE (spessore ridotto, 8).
+            drawPath(path, outline.copy(alpha = 0.10f))
+            drawPath(
+                path, outline,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 2.4f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round,
                 ),
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFFFD9A0),
             )
         }
+        // Il numero al CENTRO del fuoco (niente più medaglietta).
+        Text(
+            streak.toString(),
+            fontSize = androidx.compose.ui.unit.TextUnit(
+                12f, androidx.compose.ui.unit.TextUnitType.Sp,
+            ),
+            fontWeight = FontWeight.Bold,
+            color = number,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -667,11 +684,8 @@ private fun StatsHubCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
 ) {
-    BouncyCard(
-        onClick = onClick,
-        onLongClick = onLongClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
+    val edit = LocalHomeEditMode.current
+    val body: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -697,16 +711,30 @@ private fun StatsHubCard(
                         tr("Tempo al telefono, app e blocchi", "Screen time, apps and blocks")
                     },
                     style = MaterialTheme.typography.bodyMedium,
-                    // GRIGIO: il valore non è un accento attivo.
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (!edit) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+    }
+    if (edit) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            content = body,
+        )
+    } else {
+        BouncyCard(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            content = body,
+        )
     }
 }
 
@@ -719,13 +747,8 @@ private fun HubCard(
     shape: TimerType? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
-    // BouncyCard: effetto pressione (1) + pressione prolungata per la modalità
-    // "sistema la home" (2).
-    BouncyCard(
-        onClick = onClick,
-        onLongClick = onLongClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
+    val edit = LocalHomeEditMode.current
+    val body: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -751,12 +774,29 @@ private fun HubCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // In modalità "sistema" la freccia sparisce e la card non è cliccabile (6).
+            if (!edit) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+    }
+    if (edit) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            content = body,
+        )
+    } else {
+        // BouncyCard: effetto pressione (1) + long-press → modalità "sistema".
+        BouncyCard(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            content = body,
+        )
     }
 }
 

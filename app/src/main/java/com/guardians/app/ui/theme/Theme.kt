@@ -5,6 +5,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.guardians.app.model.TimerType
 
 // Colori dei guardiani: uguali in entrambi i temi (sono il "marchio" di ogni tipo).
@@ -42,9 +43,17 @@ private val LightColors = lightColorScheme(
 )
 
 @Composable
-fun GuardiansTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        content = content,
-    )
+fun GuardiansTheme(
+    darkTheme: Boolean = true,
+    accent: Color? = null,
+    content: @Composable () -> Unit,
+) {
+    var scheme = if (darkTheme) DarkColors else LightColors
+    // Colore app scelto dall'utente (palette di un guardiano o colore avatar):
+    // sostituisce il primary/secondary; il testo sopra si adatta al contrasto.
+    if (accent != null) {
+        val onAccent = if (accent.luminance() > 0.5f) Color(0xFF10141F) else Color.White
+        scheme = scheme.copy(primary = accent, onPrimary = onAccent, secondary = accent)
+    }
+    MaterialTheme(colorScheme = scheme, content = content)
 }

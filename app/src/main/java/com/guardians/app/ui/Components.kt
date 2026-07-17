@@ -71,9 +71,11 @@ fun BouncyCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    // Anche un tap veloce si sente: la card si schiaccia di più (0.93) e al
+    // rilascio RIMBALZA (molla poco smorzata, con overshoot) — 4.
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 700f),
+        targetValue = if (pressed) 0.93f else 1f,
+        animationSpec = spring(dampingRatio = 0.34f, stiffness = 620f),
         label = "pressScale",
     )
     Card(

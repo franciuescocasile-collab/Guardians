@@ -203,7 +203,10 @@ fun NotifierScreen(onBack: () -> Unit) {
                             onClick = { add(System.currentTimeMillis() + min * 60_000L) },
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("+${if (min < 60) "${min}m" else "1h"}")
+                            Text(
+                                tr("tra ", "in ") +
+                                    if (min < 60) "$min min" else tr("1 ora", "1 hour"),
+                            )
                         }
                     }
                 }

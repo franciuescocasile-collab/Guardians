@@ -537,15 +537,9 @@ private fun dayInitials(): List<String> =
 /** Striscia read-only dei giorni attivi (evidenzia i giorni in cui la squadra opera). */
 @Composable
 fun WeekDaysStrip(days: Set<Int>) {
-    if (days.size == 7) {
-        Text(
-            tr("Tutti i giorni", "Every day"),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Sempre L M M G V S D: i giorni attivi in giallo grassetto, gli spenti
+    // sbiaditi (11). Niente più "Tutti i giorni" scritto.
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         dayInitials().forEachIndexed { i, label ->
             val on = days.contains(i + 1)
             Text(
@@ -553,7 +547,7 @@ fun WeekDaysStrip(days: Set<Int>) {
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
                 color = if (on) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
             )
         }
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
+import java.time.LocalDate
 
 /**
  * Storico dell'uso del telefono: millisecondi totali per giorno (aaaa-mm-gg),
@@ -16,7 +17,14 @@ object UsageHistoryRepository {
     private const val KEY_HISTORY = "usage_history"
     private const val KEY_VERSION = "usage_history_version"
     private const val CURRENT_VERSION = 2
-    private const val MAX_DAYS = 400
+
+    // MEMORIZZAZIONE A STRATI (regola dell'utente): entro 10 anni si tiene il
+    // dettaglio GIORNALIERO; oltre i 10 anni i giorni si compattano in una
+    // MEDIA MENSILE (un record al mese), così lo storico non cresce all'infinito.
+    // Tetto di sicurezza a ~2 MB: se per qualche motivo i record esplodessero,
+    // si compatta comunque.
+    private const val FULL_RETENTION_DAYS = 3653L      // ~10 anni
+    private const val MAX_RECORDS = 80_000             // ~2 MB di sicurezza
 
     private val _history = MutableStateFlow<Map<String, Long>>(emptyMap())
     val history: StateFlow<Map<String, Long>> = _history
@@ -38,19 +46,39 @@ object UsageHistoryRepository {
     /** Registra (o aggiorna) il totale di un giorno. */
     fun record(context: Context, date: String, totalMs: Long) {
         load(context)
-        val updated = (_history.value + (date to totalMs))
-            .toSortedMap()
-            .let { map ->
-                if (map.size > MAX_DAYS) {
-                    map.entries.drop(map.size - MAX_DAYS).associate { it.key to it.value }
-                } else {
-                    map
-                }
-            }
+        val updated = applyLayers(_history.value + (date to totalMs)).toSortedMap()
         _history.value = updated
         prefs(context).edit()
             .putString(KEY_HISTORY, JSONObject(updated).toString())
             .apply()
+    }
+
+    /**
+     * Compatta i dati oltre i 10 anni in medie MENSILI (chiave "aaaa-mm-01").
+     * Sotto i 10 anni e sotto il tetto di record, non tocca nulla (no-op veloce).
+     */
+    private fun applyLayers(map: Map<String, Long>): Map<String, Long> {
+        val cutoff = LocalDate.now().minusDays(FULL_RETENTION_DAYS)
+        val tooMany = map.size > MAX_RECORDS
+        val hasOld = map.keys.any { k ->
+            runCatching { LocalDate.parse(k).isBefore(cutoff) }.getOrDefault(false)
+        }
+        if (!hasOld && !tooMany) return map
+
+        val kept = HashMap<String, Long>()
+        val monthAgg = HashMap<String, Pair<Long, Int>>()
+        for ((k, v) in map) {
+            val d = runCatching { LocalDate.parse(k) }.getOrNull()
+            if (d != null && d.isBefore(cutoff)) {
+                val ym = "%04d-%02d-01".format(d.year, d.monthValue)
+                val cur = monthAgg[ym] ?: (0L to 0)
+                monthAgg[ym] = (cur.first + v) to (cur.second + 1)
+            } else {
+                kept[k] = v
+            }
+        }
+        monthAgg.forEach { (ym, sc) -> kept[ym] = if (sc.second == 0) 0L else sc.first / sc.second }
+        return kept
     }
 
     /** Media giornaliera storica (ms/giorno) sui giorni registrati, 0 se vuoto. */

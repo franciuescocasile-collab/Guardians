@@ -20,6 +20,8 @@ object SettingsRepository {
     private const val KEY_WEEK_START_MONDAY = "week_start_monday"
     private const val KEY_MONITOR_NOTIF = "monitor_notification"
     private const val KEY_SHOW_NOTIFIER_CARD = "show_notifier_card"
+    private const val KEY_APP_ACCENT = "app_accent_type"      // nome TimerType o "" (default)
+    private const val KEY_ACCENT_FROM_AVATAR = "app_accent_from_avatar"
 
     private val _vibrateOnAlert = MutableStateFlow(true)
     val vibrateOnAlert: StateFlow<Boolean> = _vibrateOnAlert
@@ -64,6 +66,15 @@ object SettingsRepository {
     private val _showNotifierCard = MutableStateFlow(false)
     val showNotifierCard: StateFlow<Boolean> = _showNotifierCard
 
+    // Colore dell'app (13): "" = predefinito, altrimenti il nome di un TimerType
+    // (palette di quel guardiano). Se accentFromAvatar è attivo, vince il colore
+    // del guardiano scelto come stemma del profilo.
+    private val _appAccentType = MutableStateFlow("")
+    val appAccentType: StateFlow<String> = _appAccentType
+
+    private val _accentFromAvatar = MutableStateFlow(false)
+    val accentFromAvatar: StateFlow<Boolean> = _accentFromAvatar
+
     private var loaded = false
 
     fun load(context: Context) {
@@ -89,6 +100,18 @@ object SettingsRepository {
         _weekStartMonday.value = prefs(context).getBoolean(KEY_WEEK_START_MONDAY, deviceItalian)
         _monitorNotification.value = prefs(context).getBoolean(KEY_MONITOR_NOTIF, true)
         _showNotifierCard.value = prefs(context).getBoolean(KEY_SHOW_NOTIFIER_CARD, false)
+        _appAccentType.value = prefs(context).getString(KEY_APP_ACCENT, "") ?: ""
+        _accentFromAvatar.value = prefs(context).getBoolean(KEY_ACCENT_FROM_AVATAR, false)
+    }
+
+    fun setAppAccentType(context: Context, type: String) {
+        _appAccentType.value = type
+        prefs(context).edit().putString(KEY_APP_ACCENT, type).apply()
+    }
+
+    fun setAccentFromAvatar(context: Context, enabled: Boolean) {
+        _accentFromAvatar.value = enabled
+        prefs(context).edit().putBoolean(KEY_ACCENT_FROM_AVATAR, enabled).apply()
     }
 
     fun setMonitorNotification(context: Context, enabled: Boolean) {

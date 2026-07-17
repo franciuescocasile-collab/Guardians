@@ -1,6 +1,5 @@
 package com.guardians.app.ui
 
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -254,7 +253,7 @@ fun CongelamentoScreen(onBack: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         if (inOvertime) {
-                            "+" + formatMs((now - freezeUntil).coerceAtLeast(1000L))
+                            tr("più ", "") + formatMs((now - freezeUntil).coerceAtLeast(1000L))
                         } else {
                             formatMs((freezeUntil - now).coerceAtLeast(1000L))
                         },
@@ -473,34 +472,34 @@ private fun FrostOverlay(intensity: Float, modifier: Modifier = Modifier) {
 }
 
 /**
- * NEVE ANIMATA (5): fiocchi che cadono con una leggera BREZZA laterale.
- * Più è lungo il timer scelto, più fiocchi cadono e più forte tira il vento.
- * Puramente decorativa: non intercetta i tocchi.
+ * NEVE ANIMATA (5): fiocchi che cadono con una brezza laterale. Più è lungo il
+ * timer, più fiocchi, più VELOCI e con più vento: a 10 min nevischio lento, a
+ * 120 min tempesta. La velocità cresce davvero perché l'orologio è manuale
+ * (con InfiniteTransition la durata era fissa). Non intercetta i tocchi.
  */
 @Composable
 private fun SnowfallOverlay(intensity: Float, modifier: Modifier = Modifier) {
-    if (intensity <= 0.02f) return
-    val k = intensity.coerceIn(0f, 1f)
-    // Un orologio continuo (secondi) che fa avanzare i fiocchi.
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "snow")
-    val t by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(
-                durationMillis = 20_000, easing = androidx.compose.animation.core.LinearEasing,
-            ),
-        ),
-        label = "snowT",
-    )
+    // Base 0.12: anche col timer al minimo c'è un po' di neve (non zero).
+    val k = (0.12f + 0.88f * intensity).coerceIn(0f, 1f)
+    // Orologio in secondi che avanza a velocità DIPENDENTE dall'intensità.
+    var clock by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var last = 0L
+        while (true) {
+            androidx.compose.runtime.withFrameMillis { ms ->
+                if (last != 0L) clock += (ms - last) / 1000f
+                last = ms
+            }
+        }
+    }
     // Semi FISSI per ogni fiocco (posizione, velocità, taglia, fase).
     val flakes = remember {
-        List(70) { i ->
+        List(90) { i ->
             val r = java.util.Random(i.toLong() * 7919)
             floatArrayOf(
                 r.nextFloat(),               // x di partenza (0..1)
-                0.5f + r.nextFloat(),        // velocità di caduta (giri per ciclo)
-                1.6f + r.nextFloat() * 2.6f, // raggio in px-base
+                0.6f + r.nextFloat() * 0.8f, // velocità relativa di caduta
+                1.6f + r.nextFloat() * 2.8f, // raggio in px-base
                 r.nextFloat(),               // fase
             )
         }
@@ -509,21 +508,26 @@ private fun SnowfallOverlay(intensity: Float, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val w = size.width
         val h = size.height
-        val count = (12 + 58 * k).toInt().coerceAtMost(flakes.size)
-        // La brezza: oscillazione + deriva laterale che cresce con l'intensità.
-        val sway = w * (0.015f + 0.05f * k)
-        val drift = w * 0.25f * k
+        val count = (8 + 82 * k).toInt().coerceAtMost(flakes.size)
+        // La VELOCITÀ di caduta cresce molto con k (0.18 → 1.4 giri/sec).
+        val fallSpeed = 0.18f + 1.25f * k
+        // La brezza: deriva laterale e oscillazione, più forti col timer.
+        val drift = w * (0.10f + 0.9f * k)
+        val swayAmp = w * (0.02f + 0.07f * k)
+        val swaySpeed = 1.2f + 3.5f * k
         for (i in 0 until count) {
             val f = flakes[i]
-            val progress = (t * f[1] + f[3]) % 1f
+            val progress = (clock * fallSpeed * f[1] + f[3]) % 1f
             val y = progress * (h + 40f) - 20f
             val x = ((f[0] * w) +
                 drift * progress +
-                sway * kotlin.math.sin((t * 6.28f * 2f + f[3] * 6.28f).toDouble()).toFloat() +
-                w) % w
+                swayAmp * kotlin.math.sin(
+                    (clock * swaySpeed + f[3] * 6.28f).toDouble(),
+                ).toFloat() +
+                2f * w) % w
             drawCircle(
-                color = snow.copy(alpha = 0.25f + 0.45f * k),
-                radius = f[2] * (0.8f + 0.6f * k),
+                color = snow.copy(alpha = 0.22f + 0.5f * k),
+                radius = f[2] * (0.7f + 0.7f * k),
                 center = Offset(x, y),
             )
         }

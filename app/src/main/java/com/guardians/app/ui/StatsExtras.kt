@@ -182,7 +182,9 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
     val barColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
     val topLabelPad = 16f  // spazio riservato in cima per il minutaggio
-    val barH = 90f + topLabelPad  // altezza totale area (barre + etichette valore)
+    // Stessa altezza del grafico giornaliero (150dp), così passando da un
+    // periodo all'altro il grafico non "salta" di dimensione (stat 8).
+    val barH = 134f + topLabelPad
     Column {
         // Area barre a ALTEZZA FISSA: tutte le basi sono allineate sullo stesso
         // asse (la riga inferiore). I valori sopra le barre sono in giallo.
@@ -710,6 +712,9 @@ private fun GoalCalendar(
                     it,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Centrata come i numeri sotto: prima era a sinistra e sembrava
+                    // sfalsata rispetto alle colonne (stat 9).
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.weight(1f),
                     fontWeight = FontWeight.Bold,
                 )

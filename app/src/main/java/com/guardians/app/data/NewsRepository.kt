@@ -29,6 +29,32 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.12.0",
+            "Colore dell'app, nuova icona e tanti ritocchi",
+            "App color, new icon and lots of polish",
+            "Ora puoi scegliere il COLORE dell'app (Personalizzazione → Colore " +
+                "dell'app): la palette di un guardiano, o quella del tuo stemma con " +
+                "un interruttore. La nuova icona dell'app ha i tre elmi (Sentinella, " +
+                "Guardiano, Custode) dentro lo scudo. Il fuocherello ora è una vera " +
+                "fiamma in movimento col numero al centro, e la Condotta sta sopra " +
+                "la barra. La neve del Congelamento accelera davvero col timer. " +
+                "Sistemi la home direttamente lì: tieni premuto, trascina con le " +
+                "lineette, spegni le sezioni con lo switch (restano lì, sbiadite, " +
+                "pronte a tornare). I grafici sono tutti della stessa altezza e la " +
+                "sveglia si può ripetere a giorni. E lo storico ora si conserva per " +
+                "10 anni (poi a medie mensili).",
+            "You can now pick the APP COLOR (Personalization → App color): a " +
+                "guardian's palette, or your crest's with a switch. The new app " +
+                "icon shows the three helms (Sentinel, Guardian, Keeper) inside the " +
+                "shield. The little flame is now a real moving fire with the number " +
+                "in its center, and Conduct sits above the bar. The Freeze snow " +
+                "truly speeds up with the timer. You arrange the home right there: " +
+                "long-press, drag with the handles, switch sections off (they stay, " +
+                "faded, ready to return). Charts are all the same height and the " +
+                "alarm can repeat on days. And history is now kept for 10 years " +
+                "(then monthly averages).",
+        ),
+        NewsItem(
             "3.11.0",
             "La home si sistema da sola (e nevica)",
             "Rearrange home in place (and it snows)",

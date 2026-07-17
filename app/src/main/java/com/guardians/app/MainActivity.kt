@@ -75,8 +75,18 @@ class MainActivity : ComponentActivity() {
             val darkTheme by SettingsRepository.darkTheme.collectAsState()
             // Cambiando lingua si ricompone tutto con i testi nuovi.
             val english by SettingsRepository.english.collectAsState()
+            // Colore app (13): dall'avatar del profilo, o dalla palette scelta.
+            val accentType by SettingsRepository.appAccentType.collectAsState()
+            val fromAvatar by SettingsRepository.accentFromAvatar.collectAsState()
+            val avatar by com.guardians.app.data.ProfileRepository.avatar.collectAsState()
+            val accent: androidx.compose.ui.graphics.Color? = run {
+                val typeName = if (fromAvatar) avatar else accentType
+                com.guardians.app.model.TimerType.entries
+                    .firstOrNull { it.name == typeName }
+                    ?.let { androidx.compose.ui.graphics.Color(it.colorArgb) }
+            }
             androidx.compose.runtime.key(english) {
-            GuardiansTheme(darkTheme = darkTheme) {
+            GuardiansTheme(darkTheme = darkTheme, accent = accent) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

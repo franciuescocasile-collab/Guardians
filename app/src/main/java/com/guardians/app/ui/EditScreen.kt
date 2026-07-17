@@ -821,7 +821,7 @@ private fun TeamSelector(current: String, onSelect: (String) -> Unit) {
                 DropdownMenuItem(
                     text = {
                         Text(
-                            tr("+ Nuova squadra…", "+ New team…"),
+                            tr("Nuova squadra…", "New team…"),
                             color = MaterialTheme.colorScheme.primary,
                         )
                     },
