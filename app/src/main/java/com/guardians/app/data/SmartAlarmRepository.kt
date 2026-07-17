@@ -21,6 +21,7 @@ object SmartAlarmRepository {
     private const val PREFS = "guardians_prefs"
     private const val KEY_ALARM_AT = "smart_alarm_at"
     private const val KEY_CYCLES = "smart_alarm_cycles"
+    private const val KEY_DAYS = "smart_alarm_days"
     private const val REQUEST_CODE = 4242
 
     /** Un ciclo di sonno completo (~90 minuti). */
@@ -37,6 +38,15 @@ object SmartAlarmRepository {
     private val _cycles = MutableStateFlow(5)
     val cycles: StateFlow<Int> = _cycles
 
+    /**
+     * I giorni in cui la sveglia si RIARMA da sola (ISO 1=lun..7=dom, riferiti
+     * al giorno del RISVEGLIO). Vuoto = sveglia una-tantum. Es: {6,7} = solo
+     * weekend: dopo lo Spegni, si riprogramma da sola per la prossima mattina
+     * di sabato o domenica, alla stessa ora dell'ultimo suono.
+     */
+    private val _days = MutableStateFlow<Set<Int>>(emptySet())
+    val days: StateFlow<Set<Int>> = _days
+
     private var loaded = false
 
     fun load(context: Context) {
@@ -45,6 +55,12 @@ object SmartAlarmRepository {
         val p = prefs(context)
         _alarmAt.value = p.getLong(KEY_ALARM_AT, 0L)
         _cycles.value = p.getInt(KEY_CYCLES, 5).coerceIn(3, 7)
+        _days.value = try {
+            val arr = org.json.JSONArray(p.getString(KEY_DAYS, "[]"))
+            (0 until arr.length()).map { arr.getInt(it) }.toSet()
+        } catch (_: Exception) {
+            emptySet()
+        }
         // Sveglia già suonata mentre l'app era chiusa: pulizia.
         if (_alarmAt.value in 1 until System.currentTimeMillis()) {
             _alarmAt.value = 0L
@@ -55,6 +71,38 @@ object SmartAlarmRepository {
     fun setCycles(context: Context, n: Int) {
         _cycles.value = n.coerceIn(3, 7)
         prefs(context).edit().putInt(KEY_CYCLES, _cycles.value).apply()
+    }
+
+    fun setDays(context: Context, days: Set<Int>) {
+        _days.value = days.filter { it in 1..7 }.toSet()
+        prefs(context).edit()
+            .putString(KEY_DAYS, org.json.JSONArray(_days.value.toList()).toString())
+            .apply()
+    }
+
+    /**
+     * Dopo lo "Spegni": se ci sono giorni di ripetizione, riarma per la
+     * PROSSIMA mattina tra quelli scelti, alla stessa ora dell'ultimo suono.
+     * Ritorna l'epoch della prossima sveglia, o 0 se non c'è ripetizione.
+     */
+    fun rearmNextIfRepeating(context: Context, lastRingAt: Long): Long {
+        load(context)
+        val set = _days.value
+        if (set.isEmpty() || lastRingAt <= 0L) return 0L
+        val zone = java.time.ZoneId.systemDefault()
+        val lastRing = java.time.Instant.ofEpochMilli(lastRingAt).atZone(zone)
+        var day = lastRing.toLocalDate().plusDays(1)
+        // Cerca il prossimo giorno selezionato (max una settimana avanti).
+        repeat(7) {
+            if (day.dayOfWeek.value in set) {
+                val at = day.atTime(lastRing.toLocalTime()).atZone(zone)
+                    .toInstant().toEpochMilli()
+                scheduleAt(context, at)
+                return at
+            }
+            day = day.plusDays(1)
+        }
+        return 0L
     }
 
     /** L'orario a cui suonerebbe attivandola ADESSO con [n] cicli. */

@@ -230,6 +230,24 @@ private fun SmartAlarmCard() {
                     cycles = cycles,
                     onChange = { SmartAlarmRepository.setCycles(context, it) },
                 )
+                Spacer(Modifier.height(10.dp))
+                // Ripetizione per giorni (9): come per i guardiani. Vuoto =
+                // una-tantum; es. sab+dom = si riarma da sola nel weekend.
+                val alarmDays by SmartAlarmRepository.days.collectAsState()
+                Text(
+                    tr(
+                        "Ripeti nei giorni (vuoto = una volta sola):",
+                        "Repeat on days (empty = one-shot):",
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                WeekDaysEditor(alarmDays) { iso ->
+                    val next = if (alarmDays.contains(iso)) alarmDays - iso
+                    else alarmDays + iso
+                    SmartAlarmRepository.setDays(context, next)
+                }
                 Spacer(Modifier.height(6.dp))
                 val previewAt = SmartAlarmRepository.wakeAtFor(cycles)
                 Text(

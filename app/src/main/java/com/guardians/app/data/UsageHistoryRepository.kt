@@ -61,34 +61,59 @@ object UsageHistoryRepository {
 
     // ---- Calendario dell'obiettivo: istantanee IMMUTABILI giorno per giorno.
     private const val KEY_GOAL_SNAPSHOTS = "goal_snapshots"
+    private const val KEY_GOAL_VALUES = "goal_value_snapshots"
 
     private val _goalSnapshots = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val goalSnapshots: StateFlow<Map<String, Boolean>> = _goalSnapshots
 
+    // Il VALORE (minuti) dell'obiettivo in vigore quel giorno: serve al
+    // commentino del calendario, che deve mostrare l'obiettivo DI ALLORA.
+    private val _goalValues = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val goalValues: StateFlow<Map<String, Int>> = _goalValues
+
     fun loadGoalSnapshots(context: Context) {
-        if (_goalSnapshots.value.isNotEmpty()) return
-        val raw = prefs(context).getString(KEY_GOAL_SNAPSHOTS, null) ?: return
-        _goalSnapshots.value = try {
-            val o = JSONObject(raw)
-            buildMap { o.keys().forEach { k -> put(k, o.getBoolean(k)) } }
-        } catch (_: Exception) {
-            emptyMap()
+        if (_goalSnapshots.value.isEmpty()) {
+            prefs(context).getString(KEY_GOAL_SNAPSHOTS, null)?.let { raw ->
+                _goalSnapshots.value = try {
+                    val o = JSONObject(raw)
+                    buildMap { o.keys().forEach { k -> put(k, o.getBoolean(k)) } }
+                } catch (_: Exception) {
+                    emptyMap()
+                }
+            }
+        }
+        if (_goalValues.value.isEmpty()) {
+            prefs(context).getString(KEY_GOAL_VALUES, null)?.let { raw ->
+                _goalValues.value = try {
+                    val o = JSONObject(raw)
+                    buildMap { o.keys().forEach { k -> put(k, o.getInt(k)) } }
+                } catch (_: Exception) {
+                    emptyMap()
+                }
+            }
         }
     }
 
     /**
      * REGOLA D'ORO: lo scatto di un giorno si scrive UNA volta sola, con
-     * l'obiettivo in vigore QUEL giorno. Cambiare l'obiettivo domani non
-     * ricolora il passato.
+     * l'obiettivo in vigore QUEL giorno (sia il verdetto sotto/sopra sia il
+     * VALORE in minuti). Cambiare l'obiettivo domani non ricolora il passato.
      */
-    fun recordGoalSnapshot(context: Context, date: String, underGoal: Boolean) {
+    fun recordGoalSnapshot(context: Context, date: String, underGoal: Boolean, goalMinutes: Int) {
         loadGoalSnapshots(context)
         if (_goalSnapshots.value.containsKey(date)) return
         val updated = _goalSnapshots.value + (date to underGoal)
         _goalSnapshots.value = updated
         val o = JSONObject()
         updated.forEach { (k, v) -> o.put(k, v) }
-        prefs(context).edit().putString(KEY_GOAL_SNAPSHOTS, o.toString()).apply()
+        val updatedValues = _goalValues.value + (date to goalMinutes)
+        _goalValues.value = updatedValues
+        val ov = JSONObject()
+        updatedValues.forEach { (k, v) -> ov.put(k, v) }
+        prefs(context).edit()
+            .putString(KEY_GOAL_SNAPSHOTS, o.toString())
+            .putString(KEY_GOAL_VALUES, ov.toString())
+            .apply()
     }
 
     /** JSON dello storico per il backup. */

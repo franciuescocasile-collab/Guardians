@@ -66,7 +66,11 @@ class AlarmActivity : ComponentActivity() {
             GuardiansTheme(darkTheme = true) {
                 AlarmScreen(
                     onDismiss = {
+                        val rangAt = System.currentTimeMillis()
                         stopAlarm()
+                        // Ripetizione (9): se sono scelti dei giorni, la sveglia
+                        // si riarma da sola per la prossima mattina tra quelli.
+                        SmartAlarmRepository.rearmNextIfRepeating(this, rangAt)
                         finish()
                     },
                     onSnooze = {

@@ -72,6 +72,19 @@ object HomeConfigRepository {
         prefs(context).edit().putString(KEY_ORDER, JSONArray(list).toString()).apply()
     }
 
+    /** Come [move], ma salta le card nascoste (per il trascinamento in home). */
+    fun moveVisible(context: Context, key: String, delta: Int) {
+        val list = _order.value.toMutableList()
+        val i = list.indexOf(key)
+        if (i < 0) return
+        var j = i + delta
+        while (j in list.indices && list[j] in _hidden.value) j += delta
+        if (j !in list.indices) return
+        list[i] = list[j].also { list[j] = list[i] }
+        _order.value = list
+        prefs(context).edit().putString(KEY_ORDER, JSONArray(list).toString()).apply()
+    }
+
     /** Mostra o nasconde una card (solo quelle in [HIDEABLE]). */
     fun setHidden(context: Context, key: String, hide: Boolean) {
         if (key !in HIDEABLE) return

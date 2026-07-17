@@ -28,10 +28,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Notifications
@@ -46,6 +49,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -276,14 +281,133 @@ fun HubScreen(
 
         Spacer(Modifier.height(4.dp))
 
-        // ORDINE E VISIBILITÀ delle card: configurabili da Impostazioni →
-        // "La homepage". Le card essenziali si possono solo spostare; Guide,
-        // Notificatore e Sonno anche nascondere (i dati restano sempre).
+        // ORDINE E VISIBILITÀ delle card: si sistemano DIRETTAMENTE QUI (2).
+        // Pressione prolungata su una card → modalità "sistema la home":
+        // a sinistra compaiono le tre lineette (trascina per spostare), a
+        // destra lo switch per nascondere (solo Guide/Notificatore/Sonno).
         com.guardians.app.data.HomeConfigRepository.load(context)
         val cardOrder by com.guardians.app.data.HomeConfigRepository.order.collectAsState()
         val hiddenCards by com.guardians.app.data.HomeConfigRepository.hidden.collectAsState()
+        var homeEdit by remember { mutableStateOf(false) }
+        var confirmHideSleep by remember { mutableStateOf(false) }
+        var showAddCards by remember { mutableStateOf(false) }
+
+        if (confirmHideSleep) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { confirmHideSleep = false },
+                title = { Text(tr("Nascondere il Sonno?", "Hide Sleep?")) },
+                text = {
+                    Text(
+                        tr(
+                            "Nascondendo la sezione Sonno, anche l'Araldo andrà in " +
+                                "standby e tutti i suoi blocchi orari notturni verranno " +
+                                "temporaneamente disattivati. Vuoi procedere?\n\n" +
+                                "(I dati sul sonno continuano a essere raccolti: " +
+                                "rimostrando la card, l'Araldo si riattiva da solo.)",
+                            "Hiding the Sleep section will also put the Herald on " +
+                                "standby, temporarily disabling its nighttime blocks. " +
+                                "Proceed?\n\n(Sleep data keeps being collected: show " +
+                                "the card again and the Herald wakes up.)",
+                        ),
+                    )
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            com.guardians.app.data.HomeConfigRepository.setHidden(
+                                context,
+                                com.guardians.app.data.HomeConfigRepository.CARD_SLEEP,
+                                true,
+                            )
+                            confirmHideSleep = false
+                        },
+                    ) { Text(tr("Nascondi e metti in standby", "Hide and stand by")) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = { confirmHideSleep = false },
+                    ) { Text(tr("Annulla", "Cancel")) }
+                },
+            )
+        }
+
+        if (showAddCards) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showAddCards = false },
+                title = { Text(tr("Aggiungi una card", "Add a card")) },
+                text = {
+                    Column {
+                        if (hiddenCards.isEmpty()) {
+                            Text(
+                                tr(
+                                    "Tutte le card sono già in home.",
+                                    "All cards are already on home.",
+                                ),
+                            )
+                        }
+                        hiddenCards.forEach { key ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                            ) {
+                                Text(
+                                    com.guardians.app.data.HomeConfigRepository
+                                        .displayName(key),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                androidx.compose.material3.TextButton(
+                                    onClick = {
+                                        com.guardians.app.data.HomeConfigRepository
+                                            .setHidden(context, key, false)
+                                    },
+                                ) { Text(tr("Aggiungi", "Add")) }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = { showAddCards = false },
+                    ) { Text(tr("Chiudi", "Close")) }
+                },
+            )
+        }
+
+        if (homeEdit) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    tr("Sistema la tua home", "Arrange your home"),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.TextButton(onClick = { homeEdit = false }) {
+                    Text(tr("Fatto", "Done"), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
         for (cardKey in cardOrder) {
             if (cardKey in hiddenCards) continue
+            HomeEditableRow(
+                cardKey = cardKey,
+                editMode = homeEdit,
+                hideable = cardKey in com.guardians.app.data.HomeConfigRepository.HIDEABLE,
+                onDragMove = { delta ->
+                    com.guardians.app.data.HomeConfigRepository
+                        .moveVisible(context, cardKey, delta)
+                },
+                onHide = {
+                    if (cardKey == com.guardians.app.data.HomeConfigRepository.CARD_SLEEP) {
+                        confirmHideSleep = true
+                    } else {
+                        com.guardians.app.data.HomeConfigRepository
+                            .setHidden(context, cardKey, true)
+                    }
+                },
+            ) {
             when (cardKey) {
                 com.guardians.app.data.HomeConfigRepository.CARD_GUARDIANI -> HubCard(
                     title = tr("Nuovo guardiano", "New guardian"),
@@ -293,6 +417,7 @@ fun HubScreen(
                     ),
                     icon = Icons.Default.Shield,
                     onClick = onCreateTimer,
+                    onLongClick = { homeEdit = true },
                 )
 
                 com.guardians.app.data.HomeConfigRepository.CARD_SQUADRE -> HubCard(
@@ -306,6 +431,7 @@ fun HubScreen(
                     // Un gruppo di figure insieme: l'idea della squadra.
                     icon = Icons.Default.Groups,
                     onClick = onOpenTeams,
+                    onLongClick = { homeEdit = true },
                 )
 
                 com.guardians.app.data.HomeConfigRepository.CARD_FREEZE -> {
@@ -330,6 +456,7 @@ fun HubScreen(
                         },
                         icon = Icons.Default.AcUnit,
                         onClick = onOpenFreeze,
+                        onLongClick = { homeEdit = true },
                     )
                 }
 
@@ -352,6 +479,7 @@ fun HubScreen(
                         },
                         icon = Icons.Default.Alarm,
                         onClick = onOpenNotifier,
+                        onLongClick = { homeEdit = true },
                     )
                 }
 
@@ -366,6 +494,7 @@ fun HubScreen(
                     StatsHubCard(
                         todayMs = todayUsage,
                         onClick = onOpenStats,
+                        onLongClick = { homeEdit = true },
                     )
                 }
 
@@ -377,6 +506,7 @@ fun HubScreen(
                     ),
                     icon = Icons.Default.Bedtime,
                     onClick = onOpenSleep,
+                    onLongClick = { homeEdit = true },
                 )
 
                 com.guardians.app.data.HomeConfigRepository.CARD_GUIDE -> HubCard(
@@ -387,8 +517,77 @@ fun HubScreen(
                     ),
                     icon = Icons.AutoMirrored.Filled.MenuBook,
                     onClick = onOpenGuides,
+                    onLongClick = { homeEdit = true },
                 )
             }
+            }
+        }
+
+        // "Aggiungi una card": appare quando qualche sezione è nascosta (2).
+        if (hiddenCards.isNotEmpty()) {
+            HubCard(
+                title = tr("Aggiungi una card", "Add a card"),
+                subtitle = tr(
+                    "Rimetti in home le sezioni nascoste",
+                    "Bring hidden sections back to home",
+                ),
+                icon = Icons.Default.Add,
+                onClick = { showAddCards = true },
+            )
+        }
+    }
+}
+
+/**
+ * Una riga della home in modalità "sistema" (2): a sinistra le TRE LINEETTE
+ * da trascinare per spostare la card, a destra lo switch per nasconderla
+ * (solo per le card non essenziali). Fuori dalla modalità, la card è nuda.
+ */
+@Composable
+private fun HomeEditableRow(
+    cardKey: String,
+    editMode: Boolean,
+    hideable: Boolean,
+    onDragMove: (Int) -> Unit,
+    onHide: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (!editMode) {
+        content()
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        var acc by remember(cardKey) { mutableStateOf(0f) }
+        Icon(
+            Icons.Default.DragHandle,
+            contentDescription = tr("Trascina per spostare", "Drag to move"),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .size(30.dp)
+                .pointerInput(cardKey) {
+                    detectDragGestures(
+                        onDragEnd = { acc = 0f },
+                        onDragCancel = { acc = 0f },
+                    ) { change, amount ->
+                        change.consume()
+                        acc += amount.y
+                        val step = 84.dp.toPx()
+                        while (acc > step) {
+                            onDragMove(1)
+                            acc -= step
+                        }
+                        while (acc < -step) {
+                            onDragMove(-1)
+                            acc += step
+                        }
+                    }
+                },
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f)) { content() }
+        if (hideable) {
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = true, onCheckedChange = { onHide() })
         }
     }
 }
@@ -403,7 +602,7 @@ private fun plural(n: Int, one: String, many: String): String =
  */
 @Composable
 private fun StreakFlame(streak: Int) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(46.dp)) {
         Icon(
             Icons.Default.LocalFireDepartment,
             contentDescription = tr(
@@ -411,19 +610,26 @@ private fun StreakFlame(streak: Int) {
                 "$streak days in a row under the goal",
             ),
             tint = Color(0xFFFF8A3C),
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(46.dp),
         )
-        // Il numero DENTRO il corpo della fiamma: grande, scuro e spostato
-        // in basso dove l'arancione è pieno (prima era troppo piccolo e alto).
-        Text(
-            streak.toString(),
-            fontSize = androidx.compose.ui.unit.TextUnit(
-                13f, androidx.compose.ui.unit.TextUnitType.Sp,
-            ),
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF221407),
-            modifier = Modifier.padding(top = 14.dp),
-        )
+        // Il numero su una MEDAGLIETTA scura dentro la fiamma: contrasto
+        // garantito, qualunque sia lo sfondo (prima si perdeva nell'arancione).
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .padding(top = 12.dp)
+                .size(20.dp)
+                .background(Color(0xE6221407), CircleShape),
+        ) {
+            Text(
+                streak.toString(),
+                fontSize = androidx.compose.ui.unit.TextUnit(
+                    11f, androidx.compose.ui.unit.TextUnitType.Sp,
+                ),
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFFD9A0),
+            )
+        }
     }
 }
 
@@ -456,9 +662,14 @@ private fun MiniConductBar(good: Float, modifier: Modifier = Modifier) {
  * schermo di oggi in GRIGIO, con la label esplicita.
  */
 @Composable
-private fun StatsHubCard(todayMs: Long?, onClick: () -> Unit) {
-    Card(
+private fun StatsHubCard(
+    todayMs: Long?,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
+    BouncyCard(
         onClick = onClick,
+        onLongClick = onLongClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
@@ -506,9 +717,13 @@ private fun HubCard(
     onClick: () -> Unit,
     icon: ImageVector? = null,
     shape: TimerType? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
-    Card(
+    // BouncyCard: effetto pressione (1) + pressione prolungata per la modalità
+    // "sistema la home" (2).
+    BouncyCard(
         onClick = onClick,
+        onLongClick = onLongClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(

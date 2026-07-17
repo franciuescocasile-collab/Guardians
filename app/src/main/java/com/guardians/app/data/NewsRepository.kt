@@ -29,6 +29,32 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.11.0",
+            "La home si sistema da sola (e nevica)",
+            "Rearrange home in place (and it snows)",
+            "Tieni premuto su una card della home: compaiono le lineette per " +
+                "trascinarla dove vuoi e lo switch per nasconderla; in fondo, " +
+                "\"Aggiungi una card\" per rimettere le sezioni nascoste. Le card " +
+                "ora si SCHIACCIANO quando le premi, come pulsanti veri. Nel " +
+                "Congelamento cadono i fiocchi con una leggera brezza (più tempo " +
+                "= più neve e più vento) e i raggi agli angoli sono spariti. La " +
+                "sveglia si può ripetere nei giorni scelti (es. solo weekend). Il " +
+                "commentino del calendario mostra l'obiettivo DI QUEL giorno, il " +
+                "calendario è più compatto e i grafici lasciano vuoto il futuro, " +
+                "non il passato. Fiamma finalmente leggibile, categorie delle app " +
+                "corrette e in Impostazioni trovi LOGICHE.md e la cartella Icone.",
+            "Long-press a home card: drag handles appear to move it and a " +
+                "switch to hide it; at the bottom, \"Add a card\" brings hidden " +
+                "sections back. Cards now SQUISH when pressed, like real buttons. " +
+                "In Freeze, snowflakes fall with a light breeze (more time = more " +
+                "snow and wind) and the corner rays are gone. The alarm can " +
+                "repeat on chosen days (e.g. weekends only). The calendar tooltip " +
+                "shows THAT day's goal, the calendar is more compact and charts " +
+                "leave the future empty, not the past. The flame is finally " +
+                "readable, app categories are fixed, and you'll find LOGICHE.md " +
+                "and the Icons folder in the project.",
+        ),
+        NewsItem(
             "3.10.0",
             "La Sveglia Intelligente e i voti al sonno",
             "The Smart Alarm and sleep scores",

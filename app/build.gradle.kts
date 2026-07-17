@@ -14,8 +14,8 @@ android {
         targetSdk = 35
         // Versionamento semantico (Major.Minor.Patch): la Minor cresce a ogni
         // ciclo di funzioni nuove, la Patch per le sole correzioni.
-        versionCode = 25
-        versionName = "3.10.0"
+        versionCode = 26
+        versionName = "3.11.0"
     }
 
     buildTypes {

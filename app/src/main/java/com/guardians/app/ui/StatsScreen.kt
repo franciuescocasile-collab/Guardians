@@ -939,9 +939,9 @@ private fun loadUsageSummary(context: Context): UsageSummary {
 
     fun startOf(date: LocalDate) = date.atStartOfDay(zone).toInstant().toEpochMilli()
 
-    // La settimana del grafico parte da lunedì; i giorni futuri restano a zero.
+    // La settimana del grafico parte dal PRIMO GIORNO scelto nelle impostazioni
+    // (lun o dom); i giorni futuri restano a zero — devono ancora succedere.
     val today = LocalDate.now()
-    val monday = today.with(java.time.DayOfWeek.MONDAY)
     val locale = if (com.guardians.app.data.SettingsRepository.english.value) {
         Locale.ENGLISH
     } else {
@@ -952,8 +952,7 @@ private fun loadUsageSummary(context: Context): UsageSummary {
     var todayMs = 0L
     var weekMs = 0L
     val weekPerApp = HashMap<String, Long>()
-    for (i in 0..6) {
-        val date = monday.plusDays(i.toLong())
+    for (date in currentWeekDates()) {
         val label = date.dayOfWeek.getDisplayName(TextStyle.NARROW, locale).uppercase(locale)
         if (date.isAfter(today)) {
             days.add(label to 0L)
@@ -1079,9 +1078,8 @@ private fun WeekChart2(
     goalMs: Long,
 ) {
     if (days.isEmpty()) return
-    val today = LocalDate.now()
     // Media per GIORNO DELLA SETTIMANA, allineata alle 7 colonne mostrate
-    // (colonna i = today - (6-i) giorni). Calcolata da tutto lo storico.
+    // (la settimana corrente, dal primo giorno scelto). Da tutto lo storico.
     val dowAvg = remember(history) {
         val sums = HashMap<java.time.DayOfWeek, Pair<Long, Int>>()
         history.forEach { (k, v) ->
@@ -1089,8 +1087,8 @@ private fun WeekChart2(
             val cur = sums[d.dayOfWeek] ?: (0L to 0)
             sums[d.dayOfWeek] = (cur.first + v) to (cur.second + 1)
         }
-        (6 downTo 0).map { back ->
-            val s = sums[today.minusDays(back.toLong()).dayOfWeek]
+        currentWeekDates().map { date ->
+            val s = sums[date.dayOfWeek]
             if (s == null || s.second == 0) 0L else s.first / s.second
         }
     }

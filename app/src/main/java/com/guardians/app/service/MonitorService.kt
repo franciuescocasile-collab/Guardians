@@ -1235,7 +1235,9 @@ class MonitorService : Service() {
             val start = day.atStartOfDay(zone).toInstant().toEpochMilli()
             val end = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
             val used = totalUsageMs(start, end)
-            UsageHistoryRepository.recordGoalSnapshot(this, dateString, used <= goalMin * 60_000L)
+            UsageHistoryRepository.recordGoalSnapshot(
+                this, dateString, used <= goalMin * 60_000L, goalMin,
+            )
         } catch (_: Exception) {
         }
     }

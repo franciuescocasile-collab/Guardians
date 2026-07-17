@@ -18,7 +18,9 @@ enum class AppCategory(private val it: String, private val en: String, val color
     // La messaggistica (WhatsApp, Telegram…) è uno strumento necessario, non
     // svago: NON penalizza la condotta (macro Utility, peso 0).
     MESSAGGISTICA("Messaggistica", "Messaging", 0xFF26C6DA),
-    PRODUTTIVITA("Produttività", "Productivity", 0xFF29B6F6),
+    // Indaco, ben distinto dal ciano della Messaggistica: prima i due pallini
+    // erano quasi identici e Chrome/Calendar SEMBRAVANO messaggistica.
+    PRODUTTIVITA("Produttività", "Productivity", 0xFF5C6BC0),
     ALTRO("Altro", "Other", 0xFF90A4AE),
     ;
 
@@ -107,5 +109,13 @@ private val KNOWN: Map<String, AppCategory> = mapOf(
     "com.microsoft.office.outlook" to AppCategory.PRODUTTIVITA,
     "com.google.android.googlequicksearchbox" to AppCategory.PRODUTTIVITA,
     "com.android.chrome" to AppCategory.PRODUTTIVITA,
+    "com.sec.android.app.sbrowser" to AppCategory.PRODUTTIVITA,   // Samsung Internet
+    "org.mozilla.firefox" to AppCategory.PRODUTTIVITA,
+    "com.google.android.calendar" to AppCategory.PRODUTTIVITA,
+    "com.samsung.android.calendar" to AppCategory.PRODUTTIVITA,
+    "com.google.android.keep" to AppCategory.PRODUTTIVITA,
+    "com.google.android.apps.tachyon" to AppCategory.MESSAGGISTICA, // Meet/Duo
+    "com.samsung.android.messaging" to AppCategory.MESSAGGISTICA,
     "com.google.android.apps.maps" to AppCategory.MAPPE,
+    "com.waze" to AppCategory.MAPPE,
 )

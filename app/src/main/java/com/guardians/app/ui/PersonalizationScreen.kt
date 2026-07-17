@@ -246,12 +246,9 @@ fun PersonalizationScreen(onBack: () -> Unit) {
             }
         }
 
-        // ------------------------- la homepage (card, ordine e visibilità):
-        // era una pagina a sé, ora vive qui dentro (richiesta dell'utente).
-        androidx.compose.material3.HorizontalDivider(
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
-        )
-        HomeCardsEditor()
+        // La gestione della homepage ora si fa DIRETTAMENTE in home (2):
+        // pressione prolungata su una card → trascina con le lineette,
+        // nascondi con lo switch, riaggiungi con la card "Aggiungi".
     }
 }
 

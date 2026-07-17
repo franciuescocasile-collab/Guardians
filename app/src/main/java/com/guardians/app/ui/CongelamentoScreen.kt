@@ -1,5 +1,6 @@
 package com.guardians.app.ui
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -411,9 +412,11 @@ fun CongelamentoScreen(onBack: () -> Unit) {
             }
         }
     }
-        // Overlay "brina": una cornice ghiacciata sui bordi che si infittisce
+        // Overlay "brina": aloni ghiacciati sui bordi che si infittiscono
         // man mano che aumenti la durata. Il Canvas non intercetta i tocchi.
         FrostOverlay(intensity = frost, modifier = Modifier.fillMaxSize())
+        // La NEVE: fiocchi e brezza che crescono con il tempo scelto (5).
+        SnowfallOverlay(intensity = frost, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -464,26 +467,65 @@ private fun FrostOverlay(intensity: Float, modifier: Modifier = Modifier) {
             topLeft = Offset(0f, h - edge),
             size = androidx.compose.ui.geometry.Size(w, edge),
         )
-        // Cristalli: raggi corti dagli angoli, sempre più lunghi e numerosi.
-        val crystals = (6 + 26 * intensity).toInt()
-        val len = edge * 0.9f
-        val stroke = 2f
-        val corners = listOf(
-            Offset(0f, 0f), Offset(w, 0f), Offset(0f, h), Offset(w, h),
-        )
-        corners.forEach { c ->
-            for (i in 0 until crystals) {
-                val ang = (i.toFloat() / crystals) * Math.PI.toFloat() / 2f +
-                    (if (c.x > 0) Math.PI.toFloat() / 2f else 0f)
-                val dx = kotlin.math.cos(ang) * len * (if (c.x > 0) -1f else 1f)
-                val dy = kotlin.math.sin(ang) * len * (if (c.y > 0) -1f else 1f)
-                drawLine(
-                    color = frostColor.copy(alpha = 0.25f * intensity),
-                    start = c,
-                    end = Offset(c.x + dx, c.y + dy),
-                    strokeWidth = stroke,
-                )
-            }
+        // I "raggi" dagli angoli sono stati RIMOSSI (5.1): al loro posto c'è
+        // la neve animata di SnowfallOverlay.
+    }
+}
+
+/**
+ * NEVE ANIMATA (5): fiocchi che cadono con una leggera BREZZA laterale.
+ * Più è lungo il timer scelto, più fiocchi cadono e più forte tira il vento.
+ * Puramente decorativa: non intercetta i tocchi.
+ */
+@Composable
+private fun SnowfallOverlay(intensity: Float, modifier: Modifier = Modifier) {
+    if (intensity <= 0.02f) return
+    val k = intensity.coerceIn(0f, 1f)
+    // Un orologio continuo (secondi) che fa avanzare i fiocchi.
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "snow")
+    val t by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                durationMillis = 20_000, easing = androidx.compose.animation.core.LinearEasing,
+            ),
+        ),
+        label = "snowT",
+    )
+    // Semi FISSI per ogni fiocco (posizione, velocità, taglia, fase).
+    val flakes = remember {
+        List(70) { i ->
+            val r = java.util.Random(i.toLong() * 7919)
+            floatArrayOf(
+                r.nextFloat(),               // x di partenza (0..1)
+                0.5f + r.nextFloat(),        // velocità di caduta (giri per ciclo)
+                1.6f + r.nextFloat() * 2.6f, // raggio in px-base
+                r.nextFloat(),               // fase
+            )
+        }
+    }
+    val snow = androidx.compose.ui.graphics.Color(0xFFE0F7FA)
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val count = (12 + 58 * k).toInt().coerceAtMost(flakes.size)
+        // La brezza: oscillazione + deriva laterale che cresce con l'intensità.
+        val sway = w * (0.015f + 0.05f * k)
+        val drift = w * 0.25f * k
+        for (i in 0 until count) {
+            val f = flakes[i]
+            val progress = (t * f[1] + f[3]) % 1f
+            val y = progress * (h + 40f) - 20f
+            val x = ((f[0] * w) +
+                drift * progress +
+                sway * kotlin.math.sin((t * 6.28f * 2f + f[3] * 6.28f).toDouble()).toFloat() +
+                w) % w
+            drawCircle(
+                color = snow.copy(alpha = 0.25f + 0.45f * k),
+                radius = f[2] * (0.8f + 0.6f * k),
+                center = Offset(x, y),
+            )
         }
     }
 }

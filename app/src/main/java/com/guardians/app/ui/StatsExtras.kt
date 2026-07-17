@@ -98,13 +98,28 @@ fun hourlySeries(context: android.content.Context): List<Pair<String, Long>> {
     return (0..23).map { h -> "$h" to hours[h] }
 }
 
-/** Gli ultimi 7 giorni, uno per barra (per il grafico Settimanale). */
+/**
+ * I 7 giorni della SETTIMANA CORRENTE (dal primo giorno scelto nelle
+ * impostazioni). I giorni FUTURI restano vuoti — è giusto così: devono
+ * ancora succedere (3).
+ */
+fun currentWeekDates(): List<LocalDate> {
+    val today = LocalDate.now()
+    val firstDow = if (com.guardians.app.data.SettingsRepository.weekStartMonday.value) {
+        java.time.DayOfWeek.MONDAY
+    } else {
+        java.time.DayOfWeek.SUNDAY
+    }
+    var start = today
+    while (start.dayOfWeek != firstDow) start = start.minusDays(1)
+    return (0..6).map { start.plusDays(it.toLong()) }
+}
+
+/** La settimana corrente, un giorno per barra (futuri = vuoti). */
 fun last7DaysSeries(history: Map<String, Long>): List<Pair<String, Long>> {
     val locale = if (com.guardians.app.data.SettingsRepository.english.value) Locale.ENGLISH
     else Locale.ITALIAN
-    val today = LocalDate.now()
-    return (6 downTo 0).map { d ->
-        val date = today.minusDays(d.toLong())
+    return currentWeekDates().map { date ->
         val label = date.dayOfWeek.getDisplayName(TextStyle.NARROW, locale).uppercase(locale)
         label to (history[date.toString()] ?: 0L)
     }
@@ -116,31 +131,34 @@ fun last7DaysSeries(history: Map<String, Long>): List<Pair<String, Long>> {
  * azzera a ogni anno nuovo. Rispetta il primo giorno scelto (lun/dom).
  */
 fun weeksSeries(history: Map<String, Long>): List<Pair<String, Long>> {
-    val today = LocalDate.now()
     val firstDow = if (com.guardians.app.data.SettingsRepository.weekStartMonday.value) {
         java.time.DayOfWeek.MONDAY
     } else {
         java.time.DayOfWeek.SUNDAY
     }
     val weekFields = java.time.temporal.WeekFields.of(firstDow, 1)
+    // Settimane di CALENDARIO: le 4 passate + quella corrente (in corso).
+    val thisWeekStart = currentWeekDates().first()
     return (4 downTo 0).map { w ->
-        val end = today.minusWeeks(w.toLong())
-        val start = end.minusDays(6)
+        val start = thisWeekStart.minusWeeks(w.toLong())
         val days = (0..6).mapNotNull { i ->
             history[start.plusDays(i.toLong()).toString()]
         }
         val avg = if (days.isEmpty()) 0L else days.sum() / days.size
-        "S${end.get(weekFields.weekOfYear())}" to avg
+        "S${start.get(weekFields.weekOfYear())}" to avg
     }
 }
 
-/** Ultimi 12 mesi come barre (media giornaliera per mese). */
+/**
+ * L'ANNO CORRENTE, Gennaio → Dicembre (media giornaliera per mese). I mesi
+ * futuri restano vuoti — devono ancora succedere (3).
+ */
 fun yearlySeries(history: Map<String, Long>): List<Pair<String, Long>> {
     val locale = if (com.guardians.app.data.SettingsRepository.english.value) Locale.ENGLISH
     else Locale.ITALIAN
-    val now = YearMonth.now()
-    return (11 downTo 0).map { m ->
-        val ym = now.minusMonths(m.toLong())
+    val year = LocalDate.now().year
+    return (1..12).map { m ->
+        val ym = YearMonth.of(year, m)
         val vals = history.entries.mapNotNull { (k, v) ->
             val d = try { LocalDate.parse(k) } catch (_: Exception) { null }
             if (d != null && d.year == ym.year && d.monthValue == ym.monthValue) v else null
@@ -377,7 +395,10 @@ fun StatsTimeDetail(onBack: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 var shownMonth by remember { mutableStateOf(YearMonth.now()) }
                 val goalMin = ProfileRepository.dailyGoalMinutes.collectAsState().value
-                GoalCalendar(snapshots, history, goalMin, shownMonth) { shownMonth = it }
+                val goalValues by UsageHistoryRepository.goalValues.collectAsState()
+                GoalCalendar(
+                    snapshots, history, goalValues, goalMin, shownMonth,
+                ) { shownMonth = it }
             }
         }
     }
@@ -412,6 +433,9 @@ private fun HourLineChart(series: List<Pair<String, Long>>) {
     val lineColor = MaterialTheme.colorScheme.primary
     val fillColor = lineColor.copy(alpha = 0.15f)
     val n = series.size
+    // La curva si ferma all'ORA CORRENTE: le ore future restano vuote (3),
+    // perché devono ancora succedere. L'asse resta pieno fino a 23.
+    val lastIdx = remember { java.time.LocalTime.now().hour }.coerceIn(0, n - 1)
     val chartH = 150.dp
     var selected by remember { mutableStateOf<Int?>(null) }
     Column {
@@ -435,38 +459,45 @@ private fun HourLineChart(series: List<Pair<String, Long>>) {
             Canvas(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(n, maxMs) {
+                    .pointerInput(n, maxMs, lastIdx) {
                         detectTapGestures { off ->
-                            val idx = kotlin.math.round(off.x / stepX).toInt().coerceIn(0, n - 1)
+                            val idx = kotlin.math.round(off.x / stepX).toInt()
+                                .coerceIn(0, lastIdx)
                             selected = if (selected == idx) null else idx
                         }
                     },
             ) {
-                if (n < 2) return@Canvas
-                val pts = (0 until n).map { pointAt(it) }
-                // Curva morbida di Catmull-Rom convertita in bezier cubica.
-                fun buildSmooth(path: Path) {
-                    path.moveTo(pts[0].x, pts[0].y)
-                    for (i in 0 until n - 1) {
-                        val p0 = pts[if (i - 1 < 0) 0 else i - 1]
-                        val p1 = pts[i]
-                        val p2 = pts[i + 1]
-                        val p3 = pts[if (i + 2 >= n) n - 1 else i + 2]
-                        val c1x = p1.x + (p2.x - p0.x) / 6f
-                        val c1y = p1.y + (p2.y - p0.y) / 6f
-                        val c2x = p2.x - (p3.x - p1.x) / 6f
-                        val c2y = p2.y - (p3.y - p1.y) / 6f
-                        path.cubicTo(c1x, c1y, c2x, c2y, p2.x, p2.y)
+                // Solo le ore GIÀ vissute (0..lastIdx): il futuro resta vuoto.
+                val pts = (0..lastIdx).map { pointAt(it) }
+                val m = pts.size
+                if (m >= 2) {
+                    // Curva morbida di Catmull-Rom convertita in bezier cubica.
+                    fun buildSmooth(path: Path) {
+                        path.moveTo(pts[0].x, pts[0].y)
+                        for (i in 0 until m - 1) {
+                            val p0 = pts[if (i - 1 < 0) 0 else i - 1]
+                            val p1 = pts[i]
+                            val p2 = pts[i + 1]
+                            val p3 = pts[if (i + 2 >= m) m - 1 else i + 2]
+                            val c1x = p1.x + (p2.x - p0.x) / 6f
+                            val c1y = p1.y + (p2.y - p0.y) / 6f
+                            val c2x = p2.x - (p3.x - p1.x) / 6f
+                            val c2y = p2.y - (p3.y - p1.y) / 6f
+                            path.cubicTo(c1x, c1y, c2x, c2y, p2.x, p2.y)
+                        }
                     }
+                    val fill = Path().apply {
+                        buildSmooth(this)
+                        lineTo(pts.last().x, size.height)
+                        lineTo(pts.first().x, size.height)
+                        close()
+                    }
+                    drawPath(fill, fillColor)
+                    drawPath(
+                        Path().apply { buildSmooth(this) },
+                        lineColor, style = Stroke(width = 5f),
+                    )
                 }
-                val fill = Path().apply {
-                    buildSmooth(this)
-                    lineTo(size.width, size.height)
-                    lineTo(0f, size.height)
-                    close()
-                }
-                drawPath(fill, fillColor)
-                drawPath(Path().apply { buildSmooth(this) }, lineColor, style = Stroke(width = 5f))
                 // Puntini; quello selezionato è evidenziato con un anello.
                 pts.forEachIndexed { i, p ->
                     if (i == selected) {
@@ -542,6 +573,7 @@ private fun DayTooltip(
     date: LocalDate,
     usageMs: Long?,
     goalMinutes: Int,
+    goalIsCurrent: Boolean = false,
     onClose: () -> Unit,
 ) {
     Card(
@@ -572,7 +604,8 @@ private fun DayTooltip(
                 if (goalMinutes > 0) {
                     val goalMs = goalMinutes * 60_000L
                     Text(
-                        tr("Obiettivo: ", "Goal: ") + formatMs(goalMs),
+                        (if (goalIsCurrent) tr("Obiettivo (attuale): ", "Goal (current): ")
+                        else tr("Obiettivo: ", "Goal: ")) + formatMs(goalMs),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.inverseOnSurface,
                     )
@@ -608,6 +641,7 @@ private fun DayTooltip(
 private fun GoalCalendar(
     snapshots: Map<String, Boolean>,
     history: Map<String, Long>,
+    goalValues: Map<String, Int>,
     goalMinutes: Int,
     ym: YearMonth,
     onMonthChange: (YearMonth) -> Unit,
@@ -687,8 +721,9 @@ private fun GoalCalendar(
                 for (c in 0 until 7) {
                     val cellIndex = r * 7 + c
                     val dayNum = cellIndex - lead + 1
+                    // Celle più basse (6.1): il calendario non deve sembrare enorme.
                     Box(
-                        modifier = Modifier.weight(1f).aspectRatio(1f),
+                        modifier = Modifier.weight(1f).height(36.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (dayNum in 1..ym.lengthOfMonth()) {
@@ -736,7 +771,10 @@ private fun GoalCalendar(
                                         DayTooltip(
                                             date = ym.atDay(dayNum),
                                             usageMs = history[date],
-                                            goalMinutes = goalMinutes,
+                                            // L'obiettivo DI QUEL GIORNO (istantanea);
+                                            // solo se mai registrato usa l'attuale.
+                                            goalMinutes = goalValues[date] ?: goalMinutes,
+                                            goalIsCurrent = goalValues[date] == null,
                                             onClose = { selectedDay = null },
                                         )
                                     }
