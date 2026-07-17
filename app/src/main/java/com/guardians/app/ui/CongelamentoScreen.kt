@@ -192,10 +192,10 @@ fun CongelamentoScreen(onBack: () -> Unit) {
         .coerceIn(0f, 1f)
 
     Box(Modifier.fillMaxSize()) {
-    // GLASSMORPHISM (20): in sessione, dietro al pannello di vetro c'è un
-    // fondale ghiacciato SFOCATO (il blur vero richiede Android 12+; sotto,
-    // resta il fondale morbido senza sfocatura).
-    if (sessionActive) IceBackdrop(Modifier.fillMaxSize())
+    // GLASSMORPHISM (20): il fondale ghiacciato SFOCATO c'è SEMPRE — mentre
+    // giri il disco cresce con i minuti scelti, in sessione è pieno (il blur
+    // vero richiede Android 12+; sotto, resta il fondale morbido).
+    IceBackdrop(intensity = frost, modifier = Modifier.fillMaxSize())
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -418,19 +418,21 @@ fun CongelamentoScreen(onBack: () -> Unit) {
 }
 
 /**
- * Fondale "vetro ghiacciato" per la sessione attiva: grandi aloni azzurro
- * ghiaccio SFOCATI (blur reale su Android 12+, altrimenti restano morbidi).
- * Sta dietro al pannello traslucido e non intercetta i tocchi.
+ * Fondale "vetro ghiacciato": grandi aloni azzurro ghiaccio SFOCATI (blur
+ * reale su Android 12+, altrimenti restano morbidi). [intensity] 0..1: mentre
+ * giri il disco cresce coi minuti, in sessione è pieno. Non intercetta tocchi.
  */
 @Composable
-private fun IceBackdrop(modifier: Modifier = Modifier) {
+private fun IceBackdrop(intensity: Float, modifier: Modifier = Modifier) {
+    if (intensity <= 0.02f) return
     val ice = androidx.compose.ui.graphics.Color(0xFFE0F7FA)
+    val k = intensity.coerceIn(0f, 1f)
     Canvas(modifier.blur(48.dp)) {
         val w = size.width
         val h = size.height
-        drawCircle(ice.copy(alpha = 0.16f), radius = w * 0.55f, center = Offset(w * 0.15f, h * 0.20f))
-        drawCircle(ice.copy(alpha = 0.12f), radius = w * 0.65f, center = Offset(w * 0.95f, h * 0.45f))
-        drawCircle(ice.copy(alpha = 0.14f), radius = w * 0.50f, center = Offset(w * 0.30f, h * 0.90f))
+        drawCircle(ice.copy(alpha = 0.19f * k), radius = w * 0.55f, center = Offset(w * 0.15f, h * 0.20f))
+        drawCircle(ice.copy(alpha = 0.14f * k), radius = w * 0.65f, center = Offset(w * 0.95f, h * 0.45f))
+        drawCircle(ice.copy(alpha = 0.16f * k), radius = w * 0.50f, center = Offset(w * 0.30f, h * 0.90f))
     }
 }
 

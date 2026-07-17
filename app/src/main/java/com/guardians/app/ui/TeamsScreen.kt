@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderSpecial
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -263,6 +264,13 @@ fun TeamsScreen(
             }
         }
 
+        // Icona personalizzata per squadra (7): cartella, gruppo o un elmo.
+        val teamIcons by TeamsRepository.teamIcons.collectAsState()
+        var iconTarget by remember { mutableStateOf<String?>(null) }
+        iconTarget?.let { t ->
+            TeamIconDialog(team = t, onDismiss = { iconTarget = null })
+        }
+
         teams.forEach { (team, members) ->
             val shadowed = SpellsRepository.isShadowed(team)
             // Box come àncora del menù contestuale aperto dalla pressione prolungata.
@@ -285,11 +293,9 @@ fun TeamsScreen(
                             .fillMaxWidth()
                             .padding(16.dp),
                     ) {
-                        Icon(
-                            Icons.Default.Folder,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp),
+                        TeamIcon(
+                            teamIcons[team] ?: TeamsRepository.ICON_FOLDER,
+                            Modifier.size(30.dp),
                         )
                         Spacer(Modifier.width(16.dp))
                         Column(Modifier.weight(1f)) {
@@ -321,6 +327,19 @@ fun TeamsScreen(
                     }
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(tr("Cambia icona", "Change icon")) },
+                        leadingIcon = {
+                            TeamIcon(
+                                teamIcons[team] ?: TeamsRepository.ICON_FOLDER,
+                                Modifier.size(22.dp),
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            iconTarget = team
+                        },
+                    )
                     DropdownMenuItem(
                         text = { Text(tr("Lancia Incantesimo", "Cast a spell")) },
                         leadingIcon = {
@@ -392,6 +411,117 @@ private fun NewTeamDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(tr("Annulla", "Cancel")) }
+        },
+    )
+}
+
+/**
+ * L'icona di una squadra: cartella classica, gruppo di guardiani (colorato col
+ * giallo dell'app) oppure l'elmo di uno dei tipi (7).
+ */
+@Composable
+private fun TeamIcon(iconKey: String, modifier: Modifier = Modifier) {
+    when (iconKey) {
+        TeamsRepository.ICON_GROUPS -> Icon(
+            Icons.Default.Groups,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = modifier,
+        )
+
+        TeamsRepository.ICON_FOLDER -> Icon(
+            Icons.Default.Folder,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = modifier,
+        )
+
+        else -> {
+            val type = com.guardians.app.model.TimerType.entries
+                .firstOrNull { it.name == iconKey }
+            if (type != null) {
+                TimerShapeIcon(type, modifier)
+            } else {
+                Icon(
+                    Icons.Default.Folder,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = modifier,
+                )
+            }
+        }
+    }
+}
+
+/** La scelta dell'icona della squadra: cartella, gruppo o uno degli elmi. */
+@Composable
+private fun TeamIconDialog(team: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val current = TeamsRepository.teamIcons.collectAsState().value[team]
+        ?: TeamsRepository.ICON_FOLDER
+
+    @Composable
+    fun choice(key: String, content: @Composable () -> Unit) {
+        Card(
+            onClick = {
+                TeamsRepository.setIcon(context, team, key)
+                onDismiss()
+            },
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
+            border = if (current == key) {
+                androidx.compose.foundation.BorderStroke(
+                    2.dp, MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                null
+            },
+        ) {
+            Box(
+                Modifier.size(64.dp),
+                contentAlignment = Alignment.Center,
+            ) { content() }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(tr("Icona di \"$team\"", "Icon for \"$team\"")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    choice(TeamsRepository.ICON_FOLDER) {
+                        Icon(
+                            Icons.Default.Folder,
+                            contentDescription = tr("Cartella", "Folder"),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                    choice(TeamsRepository.ICON_GROUPS) {
+                        Icon(
+                            Icons.Default.Groups,
+                            contentDescription = tr("Gruppo", "Group"),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(44.dp),
+                        )
+                    }
+                }
+                com.guardians.app.model.TimerType.entries.chunked(4).forEach { rowTypes ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        rowTypes.forEach { type ->
+                            choice(type.name) {
+                                TimerShapeIcon(type, Modifier.size(44.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(tr("Chiudi", "Close")) }
         },
     )
 }

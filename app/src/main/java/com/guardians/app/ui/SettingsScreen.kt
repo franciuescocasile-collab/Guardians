@@ -19,7 +19,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Flight
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Notifications
@@ -59,7 +58,6 @@ fun SettingsScreen(
     onOpenNotifications: () -> Unit,
     onOpenBattery: () -> Unit,
     onOpenPersonalization: () -> Unit,
-    onOpenHomeConfig: () -> Unit,
     onOpenAdvanced: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -267,6 +265,8 @@ fun SettingsScreen(
                 "personalizzazione", "personalization", "tema", "theme", "scuro",
                 "chiaro", "lingua", "language", "inglese", "italiano", "settimana",
                 "primo giorno", "inizio del giorno", "conferma", "week", "dark",
+                "homepage", "home", "card", "ordine", "nascondi", "sonno",
+                "notificatore", "guide",
             )
         ) Card(
             onClick = onOpenPersonalization,
@@ -290,46 +290,6 @@ fun SettingsScreen(
                         tr(
                             "Settimana, inizio del giorno, conferme, tema e lingua",
                             "Week, start of the day, confirmations, theme and language",
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        // -------------------------------------------------------- la homepage
-        if (match(
-                "homepage", "home", "card", "ordine", "nascondi", "sonno",
-                "notificatore", "guide", "order", "hide",
-            )
-        ) Card(
-            onClick = onOpenHomeConfig,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            ) {
-                Icon(
-                    Icons.Default.Home,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(tr("La homepage", "The home page"), fontWeight = FontWeight.Bold)
-                    Text(
-                        tr(
-                            "Scegli quali card vedere in home e in che ordine",
-                            "Choose which cards to show on home and their order",
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

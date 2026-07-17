@@ -29,6 +29,34 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.10.0",
+            "La Sveglia Intelligente e i voti al sonno",
+            "The Smart Alarm and sleep scores",
+            "Nella pagina Sonno arriva la SVEGLIA INTELLIGENTE: scegli i cicli " +
+                "di sonno sulla mezzaluna (consigliati 5 o 6) e lei suona a fine " +
+                "ciclo, anche sopra il blocco schermo, con lo Spegni a pressione " +
+                "prolungata e il Rimanda di 9 minuti. Sotto, la settimana di " +
+                "sonno: un voto per ogni notte (durata + fasi dallo smartwatch) e " +
+                "quanto avevi staccato il telefono prima di dormire. E poi: il " +
+                "risparmio batteria ricontrolla ogni 30 secondi (non più 5 " +
+                "minuti), le squadre hanno icone personalizzabili, la bacheca " +
+                "guadagna i record (striscia migliore, congelamento più lungo, " +
+                "giorno più intenso e più leggero), il ghiaccio del Congelamento " +
+                "cresce mentre giri il disco, gli stemmi si scelgono in grande e " +
+                "la gestione della homepage vive in Personalizzazione.",
+            "The Sleep page gains the SMART ALARM: pick your sleep cycles on the " +
+                "crescent (5 or 6 recommended) and it rings at the end of a " +
+                "cycle, even over the lock screen, with long-press Stop and a " +
+                "9-minute Snooze. Below, your week of sleep: a score for each " +
+                "night (duration + smartwatch stages) and how long you'd put the " +
+                "phone down before sleeping. Also: battery saver rechecks every " +
+                "30 seconds (no longer 5 minutes), teams get custom icons, the " +
+                "highlights board gains records (best streak, longest freeze, " +
+                "heaviest and lightest day), the Freeze ice grows as you turn " +
+                "the dial, crests are picked big, and home-page management moved " +
+                "into Personalization.",
+        ),
+        NewsItem(
             "3.9.0",
             "I grafici rifatti come si deve",
             "Charts redone properly",

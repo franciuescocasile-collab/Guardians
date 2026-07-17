@@ -245,6 +245,13 @@ fun PersonalizationScreen(onBack: () -> Unit) {
                 }
             }
         }
+
+        // ------------------------- la homepage (card, ordine e visibilità):
+        // era una pagina a sé, ora vive qui dentro (richiesta dell'utente).
+        androidx.compose.material3.HorizontalDivider(
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+        )
+        HomeCardsEditor()
     }
 }
 

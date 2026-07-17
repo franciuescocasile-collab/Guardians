@@ -16,9 +16,18 @@ object TeamsRepository {
     private const val PREFS = "guardians_prefs"
     private const val KEY_TEAMS = "custom_teams"
     private const val KEY_TEAM_DAYS = "team_days"
+    private const val KEY_TEAM_ICONS = "team_icons"
+
+    /** Icone possibili per una squadra: cartella, gruppo, o l'elmo di un tipo. */
+    const val ICON_FOLDER = "folder"
+    const val ICON_GROUPS = "groups"
 
     private val _teams = MutableStateFlow<Set<String>>(emptySet())
     val teams: StateFlow<Set<String>> = _teams
+
+    // Icona scelta per ogni squadra (chiave assente = cartella predefinita).
+    private val _teamIcons = MutableStateFlow<Map<String, String>>(emptyMap())
+    val teamIcons: StateFlow<Map<String, String>> = _teamIcons
 
     /** Giorni attivi per squadra (ISO 1=lun … 7=dom); assente = tutti i giorni. */
     private val _teamDays = MutableStateFlow<Map<String, Set<Int>>>(emptyMap())
@@ -42,6 +51,14 @@ object TeamsRepository {
                 emptyMap()
             }
         }
+        prefs(context).getString(KEY_TEAM_ICONS, null)?.let { rawIcons ->
+            _teamIcons.value = try {
+                val o = org.json.JSONObject(rawIcons)
+                buildMap { o.keys().forEach { t -> put(t, o.getString(t)) } }
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        }
         val raw = prefs(context).getString(KEY_TEAMS, null) ?: return
         _teams.value = try {
             val arr = JSONArray(raw)
@@ -49,6 +66,16 @@ object TeamsRepository {
         } catch (_: Exception) {
             emptySet()
         }
+    }
+
+    /** L'icona della squadra: "folder", "groups" o il nome di un TimerType. */
+    fun iconFor(team: String): String = _teamIcons.value[team] ?: ICON_FOLDER
+
+    fun setIcon(context: Context, team: String, icon: String) {
+        _teamIcons.value = _teamIcons.value + (team to icon)
+        val o = org.json.JSONObject()
+        _teamIcons.value.forEach { (t, i) -> o.put(t, i) }
+        prefs(context).edit().putString(KEY_TEAM_ICONS, o.toString()).apply()
     }
 
     /** I giorni in cui la squadra è di servizio (default: tutti e sette). */

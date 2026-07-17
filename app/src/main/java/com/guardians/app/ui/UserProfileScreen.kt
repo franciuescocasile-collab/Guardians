@@ -95,34 +95,47 @@ fun UserProfileScreen(
             onDismissRequest = { crestDialog = false },
             title = { Text(tr("Scegli il tuo stemma", "Choose your crest")) },
             text = {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    TimerType.entries.filter { !it.configuredFromHub }.forEach { type ->
-                        Card(
-                            onClick = {
-                                ProfileRepository.setAvatar(context, type.name)
-                                crestDialog = false
-                            },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.background
-                            ),
-                            border = if (avatar == type.name) {
-                                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                            } else {
-                                null
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(vertical = 10.dp).fillMaxWidth(),
+                // Griglia 4 per riga con elmi GRANDI (prima erano minuscoli).
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TimerType.entries.filter { !it.configuredFromHub }
+                        .chunked(4)
+                        .forEach { rowTypes ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
-                                TimerShapeIcon(type, Modifier.size(22.dp))
+                                rowTypes.forEach { type ->
+                                    Card(
+                                        onClick = {
+                                            ProfileRepository.setAvatar(context, type.name)
+                                            crestDialog = false
+                                        },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.background
+                                        ),
+                                        border = if (avatar == type.name) {
+                                            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                        } else {
+                                            null
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .padding(vertical = 12.dp)
+                                                .fillMaxWidth(),
+                                        ) {
+                                            TimerShapeIcon(type, Modifier.size(52.dp))
+                                        }
+                                    }
+                                }
+                                // Riga incompleta: riempi per non allargare le card.
+                                repeat(4 - rowTypes.size) {
+                                    Spacer(Modifier.weight(1f))
+                                }
                             }
                         }
-                    }
                 }
             },
             confirmButton = {},
@@ -376,6 +389,75 @@ fun UserProfileScreen(
                             tr("volte", "times"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                // ------------------------ gli altri record della bacheca (9)
+                UsageHistoryRepository.load(context)
+                val bacheca by androidx.compose.runtime.produceState<List<Pair<String, String>>>(
+                    initialValue = emptyList(),
+                ) {
+                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val out = mutableListOf<Pair<String, String>>()
+                        val bestStreak = com.guardians.app.data.ConductRepository
+                            .bestFocusStreak(context)
+                        if (bestStreak > 0) {
+                            out.add(
+                                tr(
+                                    "Obiettivo rispettato di fila (record)",
+                                    "Goal met in a row (record)",
+                                ) to tr(
+                                    if (bestStreak == 1) "1 giorno" else "$bestStreak giorni",
+                                    if (bestStreak == 1) "1 day" else "$bestStreak days",
+                                ),
+                            )
+                        }
+                        val longestFreeze = com.guardians.app.data.SpellsRepository
+                            .longestFreezeMs(context)
+                        if (longestFreeze >= 60_000L) {
+                            out.add(
+                                tr("Congelamento più lungo", "Longest freeze") to
+                                    formatMs(longestFreeze),
+                            )
+                        }
+                        val hist = UsageHistoryRepository.history.value
+                            .filterValues { it > 5L * 60_000L }   // via i giorni-spezzone
+                        hist.maxByOrNull { it.value }?.let { (_, ms) ->
+                            out.add(
+                                tr(
+                                    "Giorno più intenso al telefono",
+                                    "Heaviest phone day",
+                                ) to formatMs(ms),
+                            )
+                        }
+                        hist.minByOrNull { it.value }?.let { (_, ms) ->
+                            out.add(
+                                tr(
+                                    "Giorno più leggero al telefono",
+                                    "Lightest phone day",
+                                ) to formatMs(ms),
+                            )
+                        }
+                        out
+                    }
+                }
+                bacheca.forEach { (label, value) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            value,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }

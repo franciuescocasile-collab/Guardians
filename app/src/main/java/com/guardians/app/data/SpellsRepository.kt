@@ -22,6 +22,7 @@ object SpellsRepository {
     private const val KEY_SHADOW_DURATIONS = "spell_shadow_duration_counts"
     private const val KEY_FREEZE_STARTED = "spell_freeze_started"
     private const val KEY_FREEZE_OVERTIME = "spell_freeze_overtime"
+    private const val KEY_LONGEST_FREEZE = "record_longest_freeze"
 
     /** Scelte rapide predefinite (minuti) quando non c'è ancora uno storico. */
     private val DEFAULT_QUICK_MINUTES = listOf(15, 60, 180)
@@ -69,6 +70,16 @@ object SpellsRepository {
     }
 
     fun castFreeze(context: Context, untilEpochMs: Long) {
+        // Chiusura di una sessione: aggiorna il RECORD del congelamento più
+        // lungo (per la bacheca del profilo). Conta il tempo davvero resistito:
+        // meno del previsto se ti arrendi prima, di più se vai oltre-scadenza.
+        if (untilEpochMs == 0L && _freezeStartedAt.value > 0L) {
+            val endured =
+                (System.currentTimeMillis() - _freezeStartedAt.value).coerceAtLeast(0L)
+            if (endured > longestFreezeMs(context)) {
+                prefs(context).edit().putLong(KEY_LONGEST_FREEZE, endured).apply()
+            }
+        }
         _freezeUntil.value = untilEpochMs
         _freezeStartedAt.value = if (untilEpochMs > 0L) System.currentTimeMillis() else 0L
         prefs(context).edit()
@@ -78,6 +89,10 @@ object SpellsRepository {
     }
 
     fun breakFreeze(context: Context) = castFreeze(context, 0L)
+
+    /** Il congelamento più lungo mai portato a termine (record di bacheca). */
+    fun longestFreezeMs(context: Context): Long =
+        prefs(context).getLong(KEY_LONGEST_FREEZE, 0L)
 
     fun setFreezeOvertime(context: Context, enabled: Boolean) {
         _freezeOvertime.value = enabled

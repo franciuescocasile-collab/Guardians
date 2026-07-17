@@ -15,6 +15,8 @@
     <!-- Chiedere di ignorare l'ottimizzazione batteria (telefoni che "addormentano"
          le app in background, es. Samsung, durante i giochi). -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Sveglia intelligente: schermata a tutto schermo sopra il blocco. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- Vibrazione (disattivabile) quando scatta un guardiano -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Posizione: serve solo alla Vedetta (guardiano basato sul luogo) -->
@@ -93,6 +95,19 @@
         <receiver
             android:name=".service.ReminderReceiver"
             android:exported="false" />
+
+        <!-- Sveglia intelligente: scatto dell'allarme + schermata sopra il blocco. -->
+        <receiver
+            android:name=".service.AlarmReceiver"
+            android:exported="false" />
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:excludeFromRecents="true"
+            tools:ignore="LockedOrientationActivity" />
     </application>
 
 </manifest>

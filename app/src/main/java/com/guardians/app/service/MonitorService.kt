@@ -145,11 +145,13 @@ class MonitorService : Service() {
     }
 
     // Rete di sicurezza: se gli eventi batteria non arrivassero, un controllo
-    // leggero ogni 5 minuti prova comunque a svegliare i guardiani.
+    // leggero ogni 30 SECONDI prova comunque a svegliare i guardiani (era 5
+    // minuti: troppo — l'app sembrava spenta; una lettura di batteria ogni 30s
+    // costa praticamente zero).
     private val sleepFallbackCheck = object : Runnable {
         override fun run() {
             maybeWakeFromDeepSleep()
-            if (deepSleeping) handler.postDelayed(this, 300_000L)
+            if (deepSleeping) handler.postDelayed(this, 30_000L)
         }
     }
 
@@ -1033,7 +1035,7 @@ class MonitorService : Service() {
      * Sonno profondo del risparmio batteria: ferma il ticker (zero CPU), toglie
      * l'overlay e RIMUOVE i blocchi in corso — l'utente usa il telefono senza
      * alcuna interferenza. La sveglia arriva dagli eventi batteria di sistema
-     * (nessun polling), con un controllo di riserva ogni 5 minuti.
+     * (nessun polling), con un controllo di riserva ogni 30 secondi.
      */
     private fun enterDeepSleep() {
         if (deepSleeping) return
@@ -1058,7 +1060,7 @@ class MonitorService : Service() {
             )
         } catch (_: Exception) {
         }
-        handler.postDelayed(sleepFallbackCheck, 300_000L)
+        handler.postDelayed(sleepFallbackCheck, 30_000L)
         updateServiceNotification(sleeping = true)
     }
 

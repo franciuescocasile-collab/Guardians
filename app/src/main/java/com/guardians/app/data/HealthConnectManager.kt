@@ -93,6 +93,90 @@ object HealthConnectManager {
     )
 
     /**
+     * Una notte con VOTO: punteggio 0..100 del sonno (durata + fasi, se lo
+     * smartwatch le fornisce) e minuti di "distacco" dal telefono prima di
+     * addormentarsi (null se l'Araldo non ha il dato di quella sera).
+     */
+    data class NightScore(
+        val date: java.time.LocalDate,   // il giorno del RISVEGLIO
+        val score: Int,                  // 0..100
+        val durationMin: Long,
+        val gapMin: Long?,               // distacco telefono→sonno (null = ignoto)
+    )
+
+    /**
+     * Voto del sonno 0..100: fino a 70 punti dalla DURATA (pieni tra 7 e 9 ore)
+     * e fino a 30 dalle FASI (profondo ~20% e REM ~22% del totale). Senza fasi
+     * (niente smartwatch) il voto è riscalato sulla sola durata.
+     */
+    private fun sleepScore(record: SleepSessionRecord): Int {
+        val durMs = java.time.Duration.between(record.startTime, record.endTime)
+            .toMillis().coerceAtLeast(0L)
+        val durH = durMs / 3_600_000.0
+        val durationScore = when {
+            durH in 7.0..9.0 -> 70.0
+            durH < 7.0 -> 70.0 * (durH / 7.0)
+            else -> (70.0 - (durH - 9.0) * 5.0).coerceAtLeast(50.0)
+        }
+        var deepMs = 0L
+        var remMs = 0L
+        var stagedMs = 0L
+        try {
+            record.stages.forEach { s ->
+                val ms = java.time.Duration.between(s.startTime, s.endTime)
+                    .toMillis().coerceAtLeast(0L)
+                stagedMs += ms
+                when (s.stage) {
+                    SleepSessionRecord.STAGE_TYPE_DEEP -> deepMs += ms
+                    SleepSessionRecord.STAGE_TYPE_REM -> remMs += ms
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        return if (stagedMs > 0L && durMs > 0L) {
+            val deepRatio = deepMs.toDouble() / durMs
+            val remRatio = remMs.toDouble() / durMs
+            val phaseScore = 15.0 * (deepRatio / 0.20).coerceAtMost(1.0) +
+                15.0 * (remRatio / 0.22).coerceAtMost(1.0)
+            (durationScore + phaseScore).toInt().coerceIn(0, 100)
+        } else {
+            // Niente fasi: la durata vale da sola tutto il voto.
+            (durationScore / 0.7).toInt().coerceIn(0, 100)
+        }
+    }
+
+    /**
+     * Le notti dell'ultima settimana con voto e distacco, indicizzate per
+     * giorno del risveglio. Serve al grafico settimanale della pagina Sonno.
+     */
+    suspend fun weeklyNightScores(context: Context): Map<java.time.LocalDate, NightScore> {
+        val zone = java.time.ZoneId.systemDefault()
+        val end = Instant.now()
+        val start = end.minusSeconds(8L * 24 * 3600)
+        val sessions = readSleep(context, start, end)
+        if (sessions.isEmpty()) return emptyMap()
+        val phoneOffs = AraldoData.bedtimeEpochs(context).map { Instant.ofEpochMilli(it) }
+        val out = HashMap<java.time.LocalDate, NightScore>()
+        for (s in sessions) {
+            val wakeDay = s.endTime.atZone(zone).toLocalDate()
+            val durMin = java.time.Duration.between(s.startTime, s.endTime)
+                .toMinutes().coerceAtLeast(0L)
+            // Tieni la dormita PIÙ LUNGA del giorno (i pisolini non contano).
+            val existing = out[wakeDay]
+            if (existing != null && existing.durationMin >= durMin) continue
+            val gap = phoneOffs
+                .filter {
+                    !it.isAfter(s.startTime) &&
+                        java.time.Duration.between(it, s.startTime).toHours() < 5
+                }
+                .maxOrNull()
+                ?.let { java.time.Duration.between(it, s.startTime).toMinutes() }
+            out[wakeDay] = NightScore(wakeDay, sleepScore(s), durMin, gap)
+        }
+        return out
+    }
+
+    /**
      * Incrocia i distacchi serali registrati dall'Araldo con le dormite di Health
      * Connect delle ultime 2 settimane. Per ogni dormita cerca il distacco più
      * vicino PRIMA dell'addormentamento (entro 5 ore) e calcola il divario.

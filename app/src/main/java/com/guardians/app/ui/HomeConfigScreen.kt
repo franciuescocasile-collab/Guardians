@@ -41,13 +41,14 @@ import com.guardians.app.data.HomeConfigRepository
 import com.guardians.app.data.tr
 
 /**
- * "La homepage": scegli quali card vedere in home e in che ordine. Le card
- * essenziali (guardiani, squadre, congelamento, statistiche) si possono solo
- * spostare; Guide, Notificatore e Sonno si possono anche nascondere.
- * Nascondere il Sonno mette in standby l'Araldo (popup di conferma, 19.2).
+ * Editor della homepage (vive dentro "Personalizzazione dell'app"): scegli
+ * quali card vedere in home e in che ordine. Le card essenziali (guardiani,
+ * squadre, congelamento, statistiche) si possono solo spostare; Guide,
+ * Notificatore e Sonno si possono anche nascondere. Nascondere il Sonno mette
+ * in standby l'Araldo (popup di conferma, 19.2).
  */
 @Composable
-fun HomeConfigScreen(onBack: () -> Unit) {
+fun HomeCardsEditor() {
     val context = LocalContext.current
     HomeConfigRepository.load(context)
     val order by HomeConfigRepository.order.collectAsState()
@@ -94,24 +95,13 @@ fun HomeConfigScreen(onBack: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
-            }
-            Text(
-                tr("La homepage", "The home page"),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-        }
+        Text(
+            tr("La homepage", "The home page"),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
         Text(
             tr(
                 "Sposta le card con le frecce e scegli quali mostrare. Le card " +

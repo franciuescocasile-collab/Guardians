@@ -149,20 +149,20 @@ fun HubScreen(
                 ) {
                     Box(
                         Modifier
-                            .size(44.dp)
+                            .size(58.dp)
                             .background(
                                 MaterialTheme.colorScheme.surface, CircleShape,
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (avatarType != null) {
-                            TimerShapeIcon(avatarType, Modifier.size(26.dp))
+                            TimerShapeIcon(avatarType, Modifier.size(40.dp))
                         } else {
                             Icon(
                                 Icons.Default.Person,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp),
+                                modifier = Modifier.size(36.dp),
                             )
                         }
                     }
@@ -207,7 +207,7 @@ fun HubScreen(
                                 maxLines = 1,
                             )
                         }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(1.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             MiniConductBar(good, Modifier.weight(1f))
                             Spacer(Modifier.width(8.dp))
@@ -236,31 +236,8 @@ fun HubScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(10.dp)
-                        .background(
-                            color = if (protectionActive) {
-                                Color(0xFF4CAF50)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            shape = CircleShape,
-                        )
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (protectionActive) {
-                        tr("Protezione attiva", "Protection active")
-                    } else {
-                        tr("Protezione non attiva", "Protection not active")
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            // La riga "Protezione attiva" è stata rimossa (richiesta utente):
+            // lo stato si capisce già dalla condotta e dalle card.
         }
 
         if (!permissions.usageAccess) {
@@ -426,7 +403,7 @@ private fun plural(n: Int, one: String, many: String): String =
  */
 @Composable
 private fun StreakFlame(streak: Int) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(38.dp)) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
         Icon(
             Icons.Default.LocalFireDepartment,
             contentDescription = tr(
@@ -434,15 +411,18 @@ private fun StreakFlame(streak: Int) {
                 "$streak days in a row under the goal",
             ),
             tint = Color(0xFFFF8A3C),
-            modifier = Modifier.size(38.dp),
+            modifier = Modifier.size(44.dp),
         )
-        // Il numero, nel corpo basso della fiamma (sopra la parte più larga).
+        // Il numero DENTRO il corpo della fiamma: grande, scuro e spostato
+        // in basso dove l'arancione è pieno (prima era troppo piccolo e alto).
         Text(
             streak.toString(),
-            style = MaterialTheme.typography.labelSmall,
+            fontSize = androidx.compose.ui.unit.TextUnit(
+                13f, androidx.compose.ui.unit.TextUnitType.Sp,
+            ),
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF10141F),
-            modifier = Modifier.padding(top = 10.dp),
+            color = Color(0xFF221407),
+            modifier = Modifier.padding(top = 14.dp),
         )
     }
 }

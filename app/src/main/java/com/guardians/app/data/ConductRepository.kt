@@ -279,6 +279,33 @@ object ConductRepository {
         return streak
     }
 
+    /**
+     * Il RECORD di giorni consecutivi sotto l'obiettivo (per la bacheca):
+     * la striscia più lunga di sempre, letta dalle istantanee immutabili.
+     */
+    fun bestFocusStreak(context: Context): Int {
+        UsageHistoryRepository.loadGoalSnapshots(context)
+        val snaps = UsageHistoryRepository.goalSnapshots.value
+        if (snaps.isEmpty()) return 0
+        val dates = snaps.keys
+            .mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
+            .sorted()
+        var best = 0
+        var cur = 0
+        var prevUnder: LocalDate? = null
+        for (d in dates) {
+            if (snaps[d.toString()] == true) {
+                cur = if (prevUnder != null && prevUnder.plusDays(1) == d) cur + 1 else 1
+                if (cur > best) best = cur
+                prevUnder = d
+            } else {
+                prevUnder = null
+                cur = 0
+            }
+        }
+        return best
+    }
+
     // =====================================================================
     //  MALUS (incantesimi e Grandi Congelamenti interrotti)
     // =====================================================================

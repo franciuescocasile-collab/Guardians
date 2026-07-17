@@ -41,7 +41,6 @@ import com.guardians.app.ui.HubScreen
 import com.guardians.app.ui.NewsScreen
 import com.guardians.app.ui.AdvancedScreen
 import com.guardians.app.ui.BatteryScreen
-import com.guardians.app.ui.HomeConfigScreen
 import com.guardians.app.ui.NotificationsScreen
 import com.guardians.app.ui.PersonalizationScreen
 import com.guardians.app.ui.SleepScreen
@@ -105,7 +104,7 @@ class MainActivity : ComponentActivity() {
 private enum class Screen {
     HUB, TEAMS, TIMERS, EDIT, PICKER, EXCLUSIONS, SETTINGS, STATS, SIGILLO, PROFILE, SPELLS,
     GUIDES, NEWS, USER_PROFILE, FREEZE, NOTIFIER, TRAVEL, NOTIFICATIONS, BATTERY,
-    PERSONALIZATION, ADVANCED, SLEEP, HOME_CONFIG,
+    PERSONALIZATION, ADVANCED, SLEEP,
 }
 
 /** Bozza del timer in modifica, con i campi numerici come testo per la digitazione. */
@@ -493,7 +492,6 @@ private fun GuardiansNav() {
             onOpenNotifications = { navigate(Screen.NOTIFICATIONS) },
             onOpenBattery = { navigate(Screen.BATTERY) },
             onOpenPersonalization = { navigate(Screen.PERSONALIZATION) },
-            onOpenHomeConfig = { navigate(Screen.HOME_CONFIG) },
             onOpenAdvanced = { navigate(Screen.ADVANCED) },
         )
 
@@ -506,8 +504,6 @@ private fun GuardiansNav() {
         Screen.ADVANCED -> AdvancedScreen(onBack = { goBack() })
 
         Screen.SLEEP -> SleepScreen(onBack = { goBack() })
-
-        Screen.HOME_CONFIG -> HomeConfigScreen(onBack = { goBack() })
 
         Screen.STATS -> StatsScreen(onBack = { goBack() })
 
