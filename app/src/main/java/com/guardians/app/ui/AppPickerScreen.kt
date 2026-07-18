@@ -64,8 +64,14 @@ fun AppPickerScreen(
     var query by remember { mutableStateOf("") }
     var selection by remember { mutableStateOf(selected) }
 
-    val apps by produceState<List<AppInfo>?>(initialValue = null) {
+    // VELOCE (6): prima si mostra subito la lista dei NOMI (leggeri), le icone
+    // arrivano riga per riga in background e restano in cache — la seconda
+    // apertura è istantanea.
+    val apps by produceState<List<AppInfo>?>(initialValue = appListCache) {
+        value = appListCache ?: withContext(Dispatchers.IO) { loadInstalledApps(context) }
+        // Ricarica comunque in sottofondo (per app installate/rimosse da poco).
         value = withContext(Dispatchers.IO) { loadInstalledApps(context) }
+            .also { appListCache = it }
     }
 
     Scaffold(
@@ -184,9 +190,25 @@ fun AppPickerScreen(
                                 }
                                 .padding(16.dp, 10.dp),
                         ) {
-                            if (app.icon != null) {
+                            // Icona caricata pigramente e tenuta in cache (6).
+                            val cachedIcon = iconCache[app.packageName]
+                            if (cachedIcon == null && !iconCache.containsKey(app.packageName)) {
+                                androidx.compose.runtime.LaunchedEffect(app.packageName) {
+                                    withContext(Dispatchers.IO) {
+                                        val bmp = try {
+                                            context.packageManager
+                                                .getApplicationIcon(app.packageName)
+                                                .toBitmap(96, 96).asImageBitmap()
+                                        } catch (_: Exception) {
+                                            null
+                                        }
+                                        iconCache[app.packageName] = bmp
+                                    }
+                                }
+                            }
+                            if (cachedIcon != null) {
                                 Image(
-                                    bitmap = app.icon,
+                                    bitmap = cachedIcon,
                                     contentDescription = null,
                                     modifier = Modifier.size(40.dp),
                                 )
@@ -211,6 +233,12 @@ fun AppPickerScreen(
     }
 }
 
+// Cache di processo: lista app e icone sopravvivono tra un'apertura e l'altra
+// del selettore — la prima volta è veloce (solo nomi), le successive istantanee.
+private var appListCache: List<AppInfo>? = null
+private val iconCache =
+    androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap?>()
+
 private fun loadInstalledApps(context: Context): List<AppInfo> {
     val pm = context.packageManager
     val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -221,12 +249,9 @@ private fun loadInstalledApps(context: Context): List<AppInfo> {
         .map { resolveInfo ->
             val packageName = resolveInfo.activityInfo.packageName
             val label = resolveInfo.loadLabel(pm)?.toString() ?: packageName
-            val icon = try {
-                resolveInfo.loadIcon(pm)?.toBitmap(96, 96)?.asImageBitmap()
-            } catch (_: Exception) {
-                null
-            }
-            AppInfo(packageName, label, icon)
+            // NIENTE icone qui (erano il collo di bottiglia): arrivano dopo,
+            // riga per riga, dalla iconCache.
+            AppInfo(packageName, label, null)
         }
         .sortedBy { it.label.lowercase() }
 }

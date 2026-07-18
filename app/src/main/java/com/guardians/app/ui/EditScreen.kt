@@ -3,9 +3,13 @@ package com.guardians.app.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +26,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -40,6 +46,7 @@ import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +56,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,11 +71,13 @@ import com.guardians.app.data.tr
 import com.guardians.app.model.GuardianTimer
 import com.guardians.app.model.ResetCycle
 import com.guardians.app.model.TimeUnit
+import com.guardians.app.model.formatMs
 import com.guardians.app.model.TimerType
 import com.guardians.app.ui.theme.RedGuardiano
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun EditScreen(
     draft: TimerDraft,
@@ -74,12 +87,24 @@ fun EditScreen(
     onSave: (GuardianTimer) -> Unit,
     onDelete: (String) -> Unit,
 ) {
+    val scroll = rememberScrollState()
+    // Quando scegli il TIPO, la pagina scende da sola alla personalizzazione
+    // (4): niente più cercare a mano le opzioni sotto la lista dei tipi.
+    var configY by remember { mutableStateOf(0) }
+    var scrollToConfig by remember { mutableStateOf(false) }
+    LaunchedEffect(scrollToConfig) {
+        if (scrollToConfig) {
+            kotlinx.coroutines.delay(120)
+            scroll.animateScrollTo(configY)
+            scrollToConfig = false
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -107,7 +132,10 @@ fun EditScreen(
                 TypeCard(
                     type = type,
                     selected = draft.type == type,
-                    onClick = { onDraftChange(draft.copy(type = type)) },
+                    onClick = {
+                        onDraftChange(draft.copy(type = type))
+                        scrollToConfig = true
+                    },
                 )
             }
         }
@@ -126,7 +154,10 @@ fun EditScreen(
                 )
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                // Qui inizia la personalizzazione: il punto dello scroll (4).
+                .onGloballyPositioned { configY = it.positionInParent().y.toInt() },
         )
 
         // Squadra: scelta rapida da un elenco delle esistenti + campo per una nuova.
@@ -593,6 +624,78 @@ fun EditScreen(
                         onValueChange = { onDraftChange(draft.copy(warnValue = it)) },
                         onUnitChange = { onDraftChange(draft.copy(warnUnit = it)) },
                     )
+                    // PIÙ preavvisi (5): quelli aggiunti col "+", eliminabili.
+                    draft.extraWarnsMs.sortedDescending().forEach { ms ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                tr(
+                                    "Avviso anche ${formatMs(ms)} prima",
+                                    "Also warn ${formatMs(ms)} before",
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(
+                                onClick = {
+                                    onDraftChange(
+                                        draft.copy(extraWarnsMs = draft.extraWarnsMs - ms),
+                                    )
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = tr("Rimuovi", "Remove"),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    // Il "+" per aggiungere un altro timer di preavviso.
+                    var addingWarn by remember { mutableStateOf(false) }
+                    if (!addingWarn) {
+                        TextButton(onClick = { addingWarn = true }) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(tr("Aggiungi un altro avviso", "Add another warning"))
+                        }
+                    } else {
+                        var extraValue by remember { mutableStateOf("") }
+                        var extraUnit by remember { mutableStateOf(TimeUnit.MINUTES) }
+                        DurationField(
+                            label = tr("Altro avviso, quanto prima", "Another warning, how long before"),
+                            value = extraValue,
+                            unit = extraUnit,
+                            onValueChange = { extraValue = it },
+                            onUnitChange = { extraUnit = it },
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = {
+                                    val v = extraValue.toIntOrNull() ?: 0
+                                    if (v > 0) {
+                                        val ms = v * extraUnit.seconds * 1000L
+                                        onDraftChange(
+                                            draft.copy(
+                                                extraWarnsMs =
+                                                    (draft.extraWarnsMs + ms).distinct(),
+                                            ),
+                                        )
+                                        addingWarn = false
+                                    }
+                                },
+                            ) { Text(tr("Aggiungi", "Add")) }
+                            TextButton(onClick = { addingWarn = false }) {
+                                Text(tr("Annulla", "Cancel"))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -616,6 +719,57 @@ fun EditScreen(
                         )
                     }
                 )
+            }
+            // Le app SCELTE, a colpo d'occhio (7): iconcina + nome, piccole.
+            if (draft.packages.isNotEmpty()) {
+                val context = LocalContext.current
+                val chosen = remember(draft.packages) {
+                    val pm = context.packageManager
+                    draft.packages.map { pkg ->
+                        val label = try {
+                            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+                        } catch (_: Exception) {
+                            pkg.substringAfterLast('.')
+                        }
+                        val icon = try {
+                            pm.getApplicationIcon(pkg).toBitmap(48, 48).asImageBitmap()
+                        } catch (_: Exception) {
+                            null
+                        }
+                        label to icon
+                    }.sortedBy { it.first.lowercase() }
+                }
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    chosen.forEach { (label, icon) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    RoundedCornerShape(50),
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            if (icon != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(Modifier.width(5.dp))
+                            }
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
             }
         }
         Row(

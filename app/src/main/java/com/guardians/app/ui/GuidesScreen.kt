@@ -447,6 +447,58 @@ private fun guides(): List<Guide> = listOf(
         ),
     ),
     Guide(
+        category = GuideCategory.BENESSERE,
+        key = "shopping",
+        title = tr(
+            "Shopping online senza farsi male",
+            "Online shopping without getting hurt",
+        ),
+        summary = tr(
+            "Vinted, Shein, Amazon e lo scrolling che svuota il portafoglio",
+            "Vinted, Shein, Amazon and the scrolling that empties your wallet",
+        ),
+        createType = TimerType.ESATTORE,
+        body = tr(
+            "Le app di shopping (Shein, Vinted, Amazon, Temu, Zalando…) sono " +
+                "costruite come i social: scroll infinito, offerte a tempo, " +
+                "notifiche \"solo per te\". Il risultato è doppio: ore perse E " +
+                "acquisti d'impulso.\n\n" +
+                "Cosa funziona davvero:\n\n" +
+                "1. L'ESATTORE è il guardiano perfetto per lo shopping: un " +
+                "pedaggio di respiro prima di entrare spegne l'impulso. La " +
+                "maggior parte delle aperture \"per noia\" muore lì.\n\n" +
+                "2. Il GENDARME limita le APERTURE giornaliere: 3 ingressi al " +
+                "giorno bastano per comprare ciò che serve, non per vagare.\n\n" +
+                "3. Spegni le NOTIFICHE delle app di shopping: le \"offerte " +
+                "lampo\" esistono per farti aprire l'app, non per farti " +
+                "risparmiare.\n\n" +
+                "4. Togli la carta salvata: se pagare costa 30 secondi in più, " +
+                "il carrello si raffredda.\n\n" +
+                "5. Regola del giorno dopo: ciò che è nel carrello si compra " +
+                "domani. Se domani lo vuoi ancora, era vero.\n\n" +
+                "Crea qui sotto un Esattore e mettigli le tue app di shopping: " +
+                "è il modo più gentile ed efficace per cominciare.",
+            "Shopping apps (Shein, Vinted, Amazon, Temu, Zalando…) are built " +
+                "like social apps: infinite scroll, timed deals, \"just for " +
+                "you\" notifications. The result is double: hours lost AND " +
+                "impulse purchases.\n\n" +
+                "What actually works:\n\n" +
+                "1. The TOLL KEEPER is the perfect shopping guardian: a " +
+                "breathing toll before entering kills the impulse. Most " +
+                "\"bored\" opens die right there.\n\n" +
+                "2. The GENDARME caps daily OPENS: 3 entries a day are enough " +
+                "to buy what you need, not to wander.\n\n" +
+                "3. Turn off shopping app NOTIFICATIONS: \"flash deals\" exist " +
+                "to make you open the app, not to save you money.\n\n" +
+                "4. Remove your saved card: if paying takes 30 extra seconds, " +
+                "the cart cools down.\n\n" +
+                "5. Next-day rule: whatever is in the cart gets bought " +
+                "tomorrow. If you still want it tomorrow, it was real.\n\n" +
+                "Create a Toll Keeper below and give it your shopping apps: " +
+                "it's the kindest, most effective way to start.",
+        ),
+    ),
+    Guide(
         category = GuideCategory.SQUADRE,
         key = "doom",
         title = tr("Guida all'anti-doomscrolling", "Anti-doomscrolling guide"),

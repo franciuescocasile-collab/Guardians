@@ -142,6 +142,8 @@ data class TimerDraft(
     val warnEnabled: Boolean,
     val warnValue: String,
     val warnUnit: TimeUnit,
+    /** Preavvisi AGGIUNTIVI in millisecondi (aggiunti col "+"). */
+    val extraWarnsMs: List<Long> = emptyList(),
     /** Squadra (vuota = Squadra Generale). */
     val team: String,
     /** Araldo: fase mattutina (dal risveglio) e serale (prima della nanna). */
@@ -224,6 +226,7 @@ data class TimerDraft(
             warnEnabled = timer.warnAmount > 0,
             warnValue = if (timer.warnAmount > 0) timer.warnAmount.toString() else "",
             warnUnit = timer.warnUnit,
+            extraWarnsMs = timer.extraWarnsMs,
             team = timer.team,
             araldoMorning = timer.araldoMorning,
             araldoEvening = timer.araldoEvening,
@@ -269,6 +272,8 @@ data class TimerDraft(
             latitude = if (type == TimerType.VEDETTA) latitude else Double.NaN,
             longitude = if (type == TimerType.VEDETTA) longitude else Double.NaN,
             radiusMeters = radiusM,
+            // I preavvisi extra valgono solo se il preavviso è acceso.
+            extraWarnsMs = if (warnEnabled) extraWarnsMs else emptyList(),
         )
         // Preavviso: se acceso, il tempo dev'essere valido; se spento, vale 0.
         val warn = if (warnEnabled) warnValue.toIntOrNull() ?: return null else 0

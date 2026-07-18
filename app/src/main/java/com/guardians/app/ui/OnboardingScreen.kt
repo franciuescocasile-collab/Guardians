@@ -34,8 +34,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.guardians.app.data.ProfileRepository
 import com.guardians.app.data.tr
-import com.guardians.app.model.TimeUnit
 import com.guardians.app.model.TimerType
+import com.guardians.app.model.formatMs
+import kotlin.math.roundToInt
 
 /**
  * Primo avvio: la Bussola. Chiede nome, stemma, obiettivo di tempo e gli
@@ -47,8 +48,9 @@ fun OnboardingScreen(onDone: () -> Unit) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(ProfileRepository.nickname.value) }
     var avatar by remember { mutableStateOf(ProfileRepository.avatar.value) }
-    var goalValue by remember { mutableStateOf("") }
-    var goalUnit by remember { mutableStateOf(TimeUnit.HOURS) }
+    // Obiettivo con la BARRA a passi di 30 minuti (3): così si può scegliere
+    // anche 3 ore e 30. 0 = nessun obiettivo.
+    var goalMin by remember { mutableStateOf(0) }
     var bedMinute by remember {
         mutableStateOf(ProfileRepository.usualBedMinute.value.takeIf { it >= 0 } ?: (23 * 60))
     }
@@ -59,13 +61,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
     fun finish() {
         if (name.isNotBlank()) ProfileRepository.setNickname(context, name)
         if (avatar.isNotBlank()) ProfileRepository.setAvatar(context, avatar)
-        goalValue.toIntOrNull()?.let { v ->
-            if (v > 0) {
-                ProfileRepository.setDailyGoalMinutes(
-                    context, (v * goalUnit.seconds / 60L).toInt(),
-                )
-            }
-        }
+        if (goalMin > 0) ProfileRepository.setDailyGoalMinutes(context, goalMin)
         ProfileRepository.setUsualBedMinute(context, bedMinute)
         ProfileRepository.setUsualWakeMinute(context, wakeMinute)
         ProfileRepository.setOnboarded(context)
@@ -99,7 +95,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
         )
 
         // ------------------------------------------------------------ 1. nome
-        OnboardingCard(title = tr("1 · Come ti chiamiamo?", "1 · What should we call you?")) {
+        OnboardingCard(title = tr("1 · Come ti chiami?", "1 · What's your name?")) {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -149,16 +145,29 @@ fun OnboardingScreen(onDone: () -> Unit) {
         OnboardingCard(
             title = tr("3 · Il tuo obiettivo di tempo", "3 · Your screen-time goal"),
             subtitle = tr(
-                "Quanto vorresti usare il telefono al giorno, al massimo?",
-                "How much would you like to use the phone per day, at most?",
+                "Quanto vorresti usare il telefono al giorno, al massimo? È il " +
+                    "tuo metro di giudizio: sotto l'obiettivo la giornata è " +
+                    "\"verde\" (calendario e fiamma dei giorni di fila), sopra " +
+                    "pesa sulla Condotta. Facoltativo: lo cambi quando vuoi.",
+                "How much would you like to use the phone per day, at most? It's " +
+                    "your yardstick: under the goal the day is \"green\" (calendar " +
+                    "and streak flame), over it weighs on your Conduct. Optional: " +
+                    "change it anytime.",
             ),
         ) {
-            DurationField(
-                label = tr("Tempo al giorno (facoltativo)", "Time per day (optional)"),
-                value = goalValue,
-                unit = goalUnit,
-                onValueChange = { goalValue = it },
-                onUnitChange = { goalUnit = it },
+            // Barra a passi di 30 minuti: si può scegliere anche 3h30 (3).
+            Text(
+                if (goalMin > 0) formatMs(goalMin * 60_000L)
+                else tr("Nessun obiettivo", "No goal"),
+                fontWeight = FontWeight.Bold,
+                color = if (goalMin > 0) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            androidx.compose.material3.Slider(
+                value = goalMin.toFloat(),
+                onValueChange = { goalMin = (it / 30f).roundToInt() * 30 },
+                valueRange = 0f..480f,
+                steps = 15,
             )
         }
 

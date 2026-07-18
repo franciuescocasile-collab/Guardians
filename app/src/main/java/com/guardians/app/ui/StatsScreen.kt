@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.text.font.FontWeight
@@ -91,11 +92,17 @@ private data class UsageSummary(
     /** Un elemento per giorno, dal più vecchio a oggi: iniziale del giorno -> ms. */
     val last7Days: List<Pair<String, Long>>,
     /** Categoria -> millisecondi di oggi (ordinate desc). */
-    val categoriesToday: List<Pair<com.guardians.app.model.AppCategory, Long>>,
+    val categoriesToday: List<CatSlice>,
     val weekMs: Long,
     val monthMs: Long,
     val yearMs: Long,
 )
+
+/**
+ * Una fetta della torta: categoria EFFETTIVA (con gli override e le categorie
+ * create dall'utente, 2.7), non solo quelle predefinite.
+ */
+private data class CatSlice(val label: String, val colorArgb: Long, val ms: Long)
 
 @Composable
 fun StatsScreen(onBack: () -> Unit) {
@@ -210,59 +217,35 @@ fun StatsScreen(onBack: () -> Unit) {
                             val histAvg = UsageHistoryRepository.dailyAverageMs()
                             val goalMs = com.guardians.app.data.ProfileRepository
                                 .dailyGoalMinutes.collectAsState().value * 60_000L
-                            // 16.1/16.2: un unico grafico settimanale (Mese e Anno
-                            // vivono nel Dettaglio): barre colorate + tre guide in
-                            // scala di grigio (media del giorno con tratteggio
-                            // sotto, media generale tratteggiata, obiettivo pieno).
+                            // Obiettivo NASCOSTO di default: si accende con un
+                            // pulsantino discreto sotto il grafico (2.6).
+                            var showGoal by remember { mutableStateOf(false) }
                             WeekChart2(
                                 days = u.last7Days,
                                 history = UsageHistoryRepository.history.value,
                                 histAvg = histAvg,
-                                goalMs = goalMs,
+                                goalMs = if (showGoal) goalMs else 0L,
                             )
-                            Spacer(Modifier.height(12.dp))
-                            if (u.weekMs > 0L) {
-                                SummaryRow(
-                                    tr("Questa settimana", "This week"),
-                                    u.weekMs,
-                                    days = LocalDate.now().dayOfWeek.value,
-                                )
-                            }
-
-                            // Confronto con la media storica registrata dai guardiani.
-                            if (histAvg > 0L) {
-                                val weekAvg = u.weekMs / LocalDate.now().dayOfWeek.value
-                                val diff = ((weekAvg - histAvg) * 100 / histAvg).toInt()
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    tr("Media storica: ", "Historical average: ") +
-                                        formatMs(histAvg) + tr("/giorno", "/day"),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    tr("Questa settimana: ", "This week: ") +
-                                        formatMs(weekAvg) + tr("/giorno ", "/day ") +
-                                        when {
-                                            diff <= -5 -> tr(
-                                                "(${-diff}% sotto la tua media!)",
-                                                "(${-diff}% below your average!)",
-                                            )
-                                            diff >= 5 -> tr(
-                                                "($diff% sopra la tua media)",
-                                                "($diff% above your average)",
-                                            )
-                                            else -> tr("(in linea)", "(on track)")
+                            // Il pulsantino dell'obiettivo: piccolo, non invasivo.
+                            if (goalMs > 0L) {
+                                TextButton(
+                                    onClick = { showGoal = !showGoal },
+                                    contentPadding = androidx.compose.foundation.layout
+                                        .PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                ) {
+                                    Text(
+                                        if (showGoal) {
+                                            tr("Nascondi obiettivo", "Hide goal")
+                                        } else {
+                                            tr("Mostra obiettivo", "Show goal")
                                         },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (diff <= -5) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                )
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
+                            // (2.6.2) Niente più "media storica / questa settimana"
+                            // qui sotto: il grafico parla da solo.
                         }
                     }
                 }
@@ -313,8 +296,8 @@ fun StatsScreen(onBack: () -> Unit) {
                                 CategoryPie(categories, Modifier.size(110.dp))
                                 Spacer(Modifier.width(20.dp))
                                 Column(Modifier.weight(1f)) {
-                                    val total = categories.sumOf { it.second }.coerceAtLeast(1L)
-                                    categories.take(5).forEach { (cat, ms) ->
+                                    val total = categories.sumOf { it.ms }.coerceAtLeast(1L)
+                                    categories.take(5).forEach { (label, colorArgb, ms) ->
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.padding(vertical = 2.dp),
@@ -323,13 +306,13 @@ fun StatsScreen(onBack: () -> Unit) {
                                                 Modifier
                                                     .size(10.dp)
                                                     .background(
-                                                        Color(cat.colorArgb),
+                                                        Color(colorArgb),
                                                         RoundedCornerShape(2.dp),
                                                     )
                                             )
                                             Spacer(Modifier.width(8.dp))
                                             Text(
-                                                cat.label,
+                                                label,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 modifier = Modifier.weight(1f),
                                             )
@@ -710,16 +693,16 @@ private fun WeekBarChart(days: List<Pair<String, Long>>, avgMs: Long, goalMs: Lo
 /** Grafico a torta delle categorie d'uso di oggi. */
 @Composable
 private fun CategoryPie(
-    categories: List<Pair<com.guardians.app.model.AppCategory, Long>>,
+    categories: List<CatSlice>,
     modifier: Modifier = Modifier,
 ) {
-    val total = categories.sumOf { it.second }.coerceAtLeast(1L)
+    val total = categories.sumOf { it.ms }.coerceAtLeast(1L)
     androidx.compose.foundation.Canvas(modifier) {
         var startAngle = -90f
-        categories.forEach { (cat, ms) ->
+        categories.forEach { (_, colorArgb, ms) ->
             val sweep = 360f * (ms.toFloat() / total.toFloat())
             drawArc(
-                color = Color(cat.colorArgb),
+                color = Color(colorArgb),
                 startAngle = startAngle,
                 sweepAngle = sweep,
                 useCenter = true,
@@ -935,13 +918,12 @@ private fun loadUsageSummary(context: Context): UsageSummary {
         }
     val topApps = allApps.take(4)
 
-    // Categorie sugli ULTIMI 7 GIORNI (auto-riconosciute).
+    // Categorie sugli ULTIMI 7 GIORNI, con gli OVERRIDE dell'utente e le
+    // categorie create da lui (2.7): la torta rispetta le tue scelte.
     val categories = weekPerApp.entries
-        .groupBy { com.guardians.app.model.categoryOf(context, it.key) }
-        .mapValues { (_, list) -> list.sumOf { it.value } }
-        .entries
-        .sortedByDescending { it.value }
-        .map { it.key to it.value }
+        .groupBy { com.guardians.app.data.CategoryRepository.resolve(context, it.key) }
+        .map { (cat, list) -> CatSlice(cat.label, cat.colorArgb, list.sumOf { it.value }) }
+        .sortedByDescending { it.ms }
 
     return UsageSummary(
         todayMs = todayMs,
@@ -999,12 +981,50 @@ private fun WeekChart2(
                 .fillMaxWidth()
                 .height(chartH),
         ) {
-            // DIETRO: la media del giorno della settimana, con tratteggio sotto.
+            // DIETRO: bande di colonna alternate + righe orarie di riferimento
+            // (2.6.1) + la media del giorno della settimana col tratteggio.
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                 val n = days.size
                 val colW = size.width / n
                 fun y(v: Long): Float =
                     size.height * (1f - (v.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f))
+
+                // Bande LEGGERMENTE diverse per distinguere le colonne.
+                for (i in 0 until n step 2) {
+                    drawRect(
+                        color = dowColor.copy(alpha = 0.06f),
+                        topLeft = androidx.compose.ui.geometry.Offset(colW * i, 0f),
+                        size = androidx.compose.ui.geometry.Size(colW, size.height),
+                    )
+                }
+
+                // Righe orarie (2h, 4h…) con l'etichetta a sinistra: un metro
+                // per capire quanto sono alte le barre.
+                val stepH = when {
+                    maxMs <= 4L * 3_600_000L -> 1L
+                    maxMs <= 9L * 3_600_000L -> 2L
+                    else -> 4L
+                }
+                val labelPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.argb(150, 150, 150, 150)
+                    textSize = 9.dp.toPx()
+                    isAntiAlias = true
+                }
+                var hLine = stepH
+                while (hLine * 3_600_000L < maxMs) {
+                    val yy = y(hLine * 3_600_000L)
+                    drawLine(
+                        color = dowColor.copy(alpha = 0.18f),
+                        start = androidx.compose.ui.geometry.Offset(0f, yy),
+                        end = androidx.compose.ui.geometry.Offset(size.width, yy),
+                        strokeWidth = 1.5f,
+                    )
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "${hLine}h", 4.dp.toPx(), yy - 3.dp.toPx(), labelPaint,
+                    )
+                    hLine += stepH
+                }
+
                 val pts = List(n) {
                     androidx.compose.ui.geometry.Offset(colW * it + colW / 2f, y(dowAvg[it]))
                 }
@@ -1103,7 +1123,9 @@ private fun WeekChart2(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LegendLine(goalColor, dashed = false, label = tr("Obiettivo", "Goal"))
+            if (goalMs > 0L) {
+                LegendLine(goalColor, dashed = false, label = tr("Obiettivo", "Goal"))
+            }
             LegendLine(avgColor, dashed = true, label = tr("Media generale", "Overall avg"))
             LegendLine(
                 dowColor, dashed = false, hatched = true,
@@ -1307,7 +1329,21 @@ private fun CategoryPickerDialog(app: TopApp, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(tr("Categoria di ${app.label}", "Category for ${app.label}")) },
+        title = {
+            // Logo dell'app accanto al titolo: chiaro subito COSA stai
+            // modificando (richiesta utente).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (app.icon != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = app.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(tr("Categoria di ${app.label}", "Category for ${app.label}"))
+            }
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 if (!creating) {

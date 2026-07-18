@@ -76,6 +76,7 @@ object TimerRepository {
                 put("activeUntilEpochMs", t.activeUntilEpochMs)
                 put("warnAmount", t.warnAmount)
                 put("warnUnit", t.warnUnit.name)
+                put("extraWarnsMs", org.json.JSONArray(t.extraWarnsMs))
                 // JSON non ammette NaN: salva le coordinate solo se impostate.
                 if (t.hasLocation) {
                     put("latitude", t.latitude)
@@ -122,6 +123,9 @@ object TimerRepository {
                 activeUntilEpochMs = o.optLong("activeUntilEpochMs", 0L),
                 warnAmount = o.optInt("warnAmount", 0),
                 warnUnit = TimeUnit.valueOf(o.optString("warnUnit", TimeUnit.MINUTES.name)),
+                extraWarnsMs = o.optJSONArray("extraWarnsMs")?.let { arr ->
+                    (0 until arr.length()).map { arr.getLong(it) }
+                } ?: emptyList(),
                 latitude = o.optDouble("latitude", Double.NaN),
                 longitude = o.optDouble("longitude", Double.NaN),
                 radiusMeters = o.optInt("radiusMeters", 150),

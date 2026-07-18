@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -464,46 +465,54 @@ private fun SleepWeekChart(nights: Map<LocalDate, HealthConnectManager.NightScor
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f),
             ) {
-                // Voto sopra la colonna.
+                // GIORNO in alto, chiaro (3): Lun, Mar, Mer…
                 Text(
-                    night?.score?.toString() ?: "",
+                    day.dayOfWeek.getDisplayName(TextStyle.SHORT, locale)
+                        .replaceFirstChar { it.uppercase() }
+                        .removeSuffix("."),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = when {
-                        night == null -> MaterialTheme.colorScheme.onSurfaceVariant
-                        night.score >= 75 -> Color(0xFF66BB6A)
-                        night.score >= 50 -> MaterialTheme.colorScheme.primary
-                        else -> Color(0xFFE57373)
-                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
-                Spacer(Modifier.height(2.dp))
-                // Colonna del voto (0..100), con base allineata.
+                Spacer(Modifier.height(4.dp))
+                // Colonna del voto: il numero è ATTACCATO alla cima della barra.
                 Box(
-                    Modifier.height(88.dp).fillMaxWidth(0.55f),
+                    Modifier.height(96.dp).fillMaxWidth(0.6f),
                     contentAlignment = Alignment.BottomCenter,
                 ) {
                     if (night != null) {
+                        val barColor = when {
+                            night.score >= 75 -> Color(0xFF66BB6A)
+                            night.score >= 50 -> MaterialTheme.colorScheme.primary
+                            else -> Color(0xFFE57373)
+                        }
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight((night.score / 100f).coerceIn(0.04f, 1f))
-                                .background(
-                                    when {
-                                        night.score >= 75 -> Color(0xFF66BB6A)
-                                        night.score >= 50 -> MaterialTheme.colorScheme.primary
-                                        else -> Color(0xFFE57373)
-                                    },
-                                    RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp),
-                                )
-                        )
+                                .fillMaxHeight((night.score / 100f).coerceIn(0.08f, 1f)),
+                            contentAlignment = Alignment.TopCenter,
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        barColor,
+                                        RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp),
+                                    )
+                            )
+                            // Il voto, appena sopra la cima della barra.
+                            Text(
+                                night.score.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = barColor,
+                                modifier = Modifier.offset(y = (-16).dp),
+                            )
+                        }
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    day.dayOfWeek.getDisplayName(TextStyle.NARROW, locale).uppercase(locale),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Spacer(Modifier.height(3.dp))
                 // Lo stacco dal telefono di quella sera.
                 Text(
                     night?.gapMin?.let { "$it min" } ?: "—",

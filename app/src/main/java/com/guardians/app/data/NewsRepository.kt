@@ -29,6 +29,36 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.14.0",
+            "Trascina e le card fanno spazio (e molto altro)",
+            "Drag and the cards make room (and much more)",
+            "Nella home, mentre trascini una card le altre SCIVOLANO per farle " +
+                "spazio. Il grafico del tempo ha i riferimenti orari a lato (2h, " +
+                "4h…), colonne distinguibili e l'obiettivo nascosto di default " +
+                "(lo accendi con un tocco). La torta rispetta le TUE categorie, " +
+                "anche quelle create da te, e il dialogo mostra il logo dell'app. " +
+                "Nell'editor: scegli il tipo e la pagina scende alle opzioni, " +
+                "PIÙ preavvisi col pulsante Aggiungi, e le app scelte si vedono " +
+                "come etichette. Il selettore app ora si apre SUBITO (icone in " +
+                "arrivo mentre scorri). All'inizio l'app chiede \"Come ti " +
+                "chiami?\", l'obiettivo si imposta con la barra a passi di 30 " +
+                "minuti (anche 3h30) e spiega a cosa serve. Nuova guida sullo " +
+                "shopping online. Nel sonno: giorni sopra, voto attaccato alla " +
+                "barra.",
+            "On home, while you drag a card the others SLIDE to make room. The " +
+                "time chart gains side hour marks (2h, 4h…), distinguishable " +
+                "columns and the goal hidden by default (turn it on with a " +
+                "tap). The pie respects YOUR categories, including the ones you " +
+                "created, and the dialog shows the app logo. In the editor: " +
+                "pick a type and the page scrolls to its options, MULTIPLE " +
+                "warnings via the Add button, and chosen apps show as chips. " +
+                "The app picker now opens INSTANTLY (icons load as you " +
+                "scroll). Onboarding asks \"What's your name?\", the goal uses " +
+                "a 30-minute-step slider (3h30 works) and explains its purpose. " +
+                "New online-shopping guide. In sleep: days on top, score " +
+                "attached to the bar.",
+        ),
+        NewsItem(
             "3.13.0",
             "Slide tra le pagine, categorie tue e promemoria ricorrenti",
             "Page slides, your own categories and recurring reminders",

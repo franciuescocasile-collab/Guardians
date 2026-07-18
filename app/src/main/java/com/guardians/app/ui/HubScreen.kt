@@ -364,20 +364,58 @@ fun HubScreen(
             }
         }
 
-        for (cardKey in cardOrder) {
+        // Stato del TRASCINAMENTO condiviso: mentre sposti una card, le ALTRE
+        // scivolano per farle spazio (1) — lo shift si calcola qui e ogni riga
+        // lo anima per conto suo.
+        var draggingKey by remember { mutableStateOf<String?>(null) }
+        var dragY by remember { mutableStateOf(0f) }
+        var dragRowH by remember { mutableStateOf(0f) }
+        val spacingPx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+        val dragStep = (if (dragRowH > 0f) dragRowH else 260f) + spacingPx
+        val dragIdx = draggingKey?.let { cardOrder.indexOf(it) } ?: -1
+        val stepsMoved = if (dragIdx >= 0) {
+            (dragY / dragStep).roundToInt()
+                .coerceIn(-dragIdx, cardOrder.size - 1 - dragIdx)
+        } else {
+            0
+        }
+        val targetIdx = dragIdx + stepsMoved
+
+        cardOrder.forEachIndexed { cardIndex, cardKey ->
             val isOff = cardKey in hiddenCards
-            // Fuori dalla modifica modifica, le card disattivate non si vedono;
+            // Fuori dalla modifica, le card disattivate non si vedono;
             // in modifica ci sono TUTTE (le spente restano lì, grigie, con lo
             // switch, così le puoi riaccendere) — 7.
-            if (!homeEdit && isOff) continue
+            if (!homeEdit && isOff) return@forEachIndexed
+            // Quanto deve scostarsi QUESTA riga per fare spazio alla trascinata.
+            val shiftTarget = when {
+                draggingKey == null || cardKey == draggingKey -> 0f
+                cardIndex in (dragIdx + 1)..targetIdx -> -dragStep
+                cardIndex in targetIdx until dragIdx -> dragStep
+                else -> 0f
+            }
             HomeEditableRow(
                 cardKey = cardKey,
                 editMode = homeEdit,
                 active = !isOff,
                 hideable = cardKey in com.guardians.app.data.HomeConfigRepository.HIDEABLE,
-                onDragMove = { delta ->
-                    com.guardians.app.data.HomeConfigRepository
-                        .move(context, cardKey, delta)
+                isDragging = cardKey == draggingKey,
+                dragOffset = if (cardKey == draggingKey) dragY else 0f,
+                shiftTarget = shiftTarget,
+                onDragStart = { h ->
+                    draggingKey = cardKey
+                    dragRowH = h
+                    dragY = 0f
+                },
+                onDragDelta = { dy -> dragY += dy },
+                onDragEnd = {
+                    val dir = if (stepsMoved > 0) 1 else -1
+                    repeat(kotlin.math.abs(stepsMoved)) {
+                        com.guardians.app.data.HomeConfigRepository
+                            .move(context, cardKey, dir)
+                    }
+                    draggingKey = null
+                    dragY = 0f
                 },
                 onToggleActive = { on ->
                     if (!on && cardKey == com.guardians.app.data.HomeConfigRepository.CARD_SLEEP) {
@@ -523,7 +561,12 @@ private fun HomeEditableRow(
     editMode: Boolean,
     active: Boolean,
     hideable: Boolean,
-    onDragMove: (Int) -> Unit,
+    isDragging: Boolean,
+    dragOffset: Float,
+    shiftTarget: Float,
+    onDragStart: (Float) -> Unit,
+    onDragDelta: (Float) -> Unit,
+    onDragEnd: () -> Unit,
     onToggleActive: (Boolean) -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -531,40 +574,38 @@ private fun HomeEditableRow(
         content()
         return
     }
-    // La card SEGUE il dito mentre trascini, e riordina UNA VOLTA al rilascio:
-    // così non si "inceppa" a ogni scavalco (2). Il passo è l'altezza vera della
-    // riga (misurata) più la spaziatura della lista.
-    var dragY by remember(cardKey) { mutableStateOf(0f) }
+    // La card trascinata SEGUE il dito; le ALTRE scivolano dolcemente per
+    // farle spazio (shiftTarget animato) — 1.
     var rowH by remember(cardKey) { mutableStateOf(0f) }
-    val dragging = dragY != 0f
+    val shift by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = shiftTarget,
+        animationSpec = androidx.compose.animation.core.tween(180),
+        label = "rowShift",
+    )
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .onGloballyPositioned { rowH = it.size.height.toFloat() }
-            .offset { IntOffset(0, dragY.roundToInt()) }
-            .zIndex(if (dragging) 1f else 0f),
+            .offset {
+                IntOffset(0, (if (isDragging) dragOffset else shift).roundToInt())
+            }
+            .zIndex(if (isDragging) 1f else 0f),
     ) {
         Icon(
             Icons.Default.DragHandle,
             contentDescription = tr("Trascina per spostare", "Drag to move"),
-            tint = if (dragging) MaterialTheme.colorScheme.primary
+            tint = if (isDragging) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .size(34.dp)
                 .pointerInput(cardKey) {
-                    val spacing = 12.dp.toPx()
                     detectVerticalDragGestures(
-                        onDragEnd = {
-                            val step = (if (rowH > 0f) rowH else 88.dp.toPx()) + spacing
-                            val steps = (dragY / step).roundToInt()
-                            val dir = if (steps > 0) 1 else -1
-                            repeat(kotlin.math.abs(steps)) { onDragMove(dir) }
-                            dragY = 0f
-                        },
-                        onDragCancel = { dragY = 0f },
+                        onDragStart = { onDragStart(rowH) },
+                        onDragEnd = { onDragEnd() },
+                        onDragCancel = { onDragEnd() },
                     ) { change, dy ->
                         change.consume()
-                        dragY += dy
+                        onDragDelta(dy)
                     }
                 },
         )

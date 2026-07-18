@@ -491,7 +491,7 @@ class MonitorService : Service() {
                             maybeWarn(timer, timer.limitMs - used)
                             if (used >= timer.limitMs) {
                                 continuousMs[timer.id] = 0L
-                                warned.remove(timer.id)
+                                warned.removeAll { it == timer.id || it.startsWith("${timer.id}:") }
                                 // Con pausa 0 non c'è pausa obbligatoria: solo espulsione.
                                 if (timer.resetMs > 0L) {
                                     cooldownUntil[timer.id] = now + timer.resetMs
@@ -505,7 +505,7 @@ class MonitorService : Service() {
                         if (seen != 0L && now - seen >= timer.resetMs) {
                             continuousMs[timer.id] = 0L
                             lastSeenMs.remove(timer.id)
-                            warned.remove(timer.id)
+                            warned.removeAll { it == timer.id || it.startsWith("${timer.id}:") }
                         }
                         if (cooldownEnd != 0L && now >= cooldownEnd) {
                             cooldownUntil.remove(timer.id)
@@ -923,18 +923,23 @@ class MonitorService : Service() {
 
     /** Manda la notifica di preavviso se manca meno di [remainingMs] al blocco. */
     private fun maybeWarn(timer: GuardianTimer, remainingMs: Long) {
-        if (timer.warnMs <= 0L || warned.contains(timer.id)) return
-        if (remainingMs <= 0L || remainingMs > timer.warnMs) return
-        warned.add(timer.id)
-        sendWarning(
-            timer,
-            tr(
-                "Tra ${formatMs(remainingMs.coerceAtLeast(1000L))} ${timer.name} " +
-                    "chiuderà le app sorvegliate.",
-                "In ${formatMs(remainingMs.coerceAtLeast(1000L))} ${timer.name} " +
-                    "will close the watched apps.",
+        if (remainingMs <= 0L) return
+        // PIÙ preavvisi per timer (5): ogni soglia (principale + aggiunte)
+        // notifica UNA volta, con chiave "id:soglia" nel set dei già avvisati.
+        for (thresholdMs in timer.allWarnsMs) {
+            val key = "${timer.id}:$thresholdMs"
+            if (remainingMs > thresholdMs || warned.contains(key)) continue
+            warned.add(key)
+            sendWarning(
+                timer,
+                tr(
+                    "Tra ${formatMs(remainingMs.coerceAtLeast(1000L))} ${timer.name} " +
+                        "chiuderà le app sorvegliate.",
+                    "In ${formatMs(remainingMs.coerceAtLeast(1000L))} ${timer.name} " +
+                        "will close the watched apps.",
+                )
             )
-        )
+        }
     }
 
     // ---------------------------------------------------------------- Araldo

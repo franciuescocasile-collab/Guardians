@@ -288,6 +288,8 @@ data class GuardianTimer(
     /** Preavviso prima del blocco (0 = nessuna notifica di avviso). */
     val warnAmount: Int = 0,
     val warnUnit: TimeUnit = TimeUnit.MINUTES,
+    /** Preavvisi AGGIUNTIVI in millisecondi (5): es. a 10 e a 2 minuti dal blocco. */
+    val extraWarnsMs: List<Long> = emptyList(),
     /** Posizione della Vedetta (NaN = non impostata) e raggio in metri. */
     val latitude: Double = Double.NaN,
     val longitude: Double = Double.NaN,
@@ -317,6 +319,10 @@ data class GuardianTimer(
     val limitMs: Long get() = limitAmount * limitUnit.seconds * 1000L
     val resetMs: Long get() = resetAmount * resetUnit.seconds * 1000L
     val warnMs: Long get() = warnAmount * warnUnit.seconds * 1000L
+
+    /** Tutte le soglie di preavviso (principale + aggiuntive), più lontana prima. */
+    val allWarnsMs: List<Long>
+        get() = (extraWarnsMs + warnMs).filter { it > 0L }.distinct().sortedDescending()
     val limitText: String get() = formatAmount(limitAmount, limitUnit)
     val resetText: String get() = formatAmount(resetAmount, resetUnit)
     val warnText: String get() = formatAmount(warnAmount, warnUnit)
