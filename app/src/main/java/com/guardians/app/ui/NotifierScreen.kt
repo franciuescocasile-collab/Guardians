@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -19,7 +20,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -171,10 +175,10 @@ fun NotifierScreen(onBack: () -> Unit) {
         }
         Text(
             tr(
-                "Un promemoria che scatta una volta sola e poi sparisce. " +
-                    "Nessuna routine, nessuna ripetizione in memoria.",
-                "A reminder that fires once and then vanishes. No routine, " +
-                    "nothing left running in memory.",
+                "Promemoria una-tantum (scatta e sparisce) o ricorrenti (si " +
+                    "ripetono a intervalli, es. bevi acqua ogni 2 ore).",
+                "One-shot reminders (fire and vanish) or recurring ones (repeat " +
+                    "at intervals, e.g. drink water every 2 hours).",
             ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -230,6 +234,66 @@ fun NotifierScreen(onBack: () -> Unit) {
                 ) {
                     Text(tr("Scegli un orario preciso…", "Pick an exact time…"))
                 }
+
+                // ------------------------------- promemoria RICORRENTE (10)
+                androidx.compose.material3.HorizontalDivider(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+                )
+                Text(
+                    tr("Ripeti a intervalli", "Repeat at intervals"),
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(
+                        "Es. \"bevi acqua\" ogni 2 ore: parte adesso e si ripete da " +
+                            "solo, senza impostare ogni volta.",
+                        "E.g. \"drink water\" every 2 hours: starts now and repeats " +
+                            "by itself, no need to set it each time.",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                var everyValue by remember { mutableStateOf("2") }
+                var everyHours by remember { mutableStateOf(true) }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = everyValue,
+                        onValueChange = { v -> everyValue = v.filter { it.isDigit() }.take(3) },
+                        label = { Text(tr("Ogni", "Every")) },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        ),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    DropdownPickerButton(
+                        text = if (everyHours) tr("ore", "hours") else tr("minuti", "minutes"),
+                        options = listOf(tr("ore", "hours"), tr("minuti", "minutes")),
+                        onSelected = { i -> everyHours = i == 0 },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Button(
+                    enabled = (everyValue.toIntOrNull() ?: 0) > 0,
+                    onClick = {
+                        val n = everyValue.toInt()
+                        val interval = if (everyHours) n * 60 else n
+                        val txt = text.ifBlank { tr("Promemoria", "Reminder") }
+                        NotifierRepository.schedule(
+                            context,
+                            txt,
+                            System.currentTimeMillis() + interval * 60_000L,
+                            intervalMin = interval,
+                        )
+                        text = ""
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(tr("Attiva promemoria ricorrente", "Start recurring reminder"))
+                }
             }
         }
 
@@ -258,15 +322,33 @@ fun NotifierScreen(onBack: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(r.text, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(r.text, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f, false))
+                            if (r.recurring) {
+                                Spacer(Modifier.width(6.dp))
+                                Icon(
+                                    Icons.Default.Repeat,
+                                    contentDescription = tr("Ricorrente", "Recurring"),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
                         val remaining = (r.fireAt - System.currentTimeMillis()).coerceAtLeast(0L)
                         val at = java.time.Instant.ofEpochMilli(r.fireAt)
                             .atZone(ZoneId.systemDefault()).toLocalTime()
                         Text(
-                            tr(
-                                "tra ${formatMs(remaining)} · alle ${formatTimeOfDay(at.hour * 60 + at.minute)}",
-                                "in ${formatMs(remaining)} · at ${formatTimeOfDay(at.hour * 60 + at.minute)}",
-                            ),
+                            if (r.recurring) {
+                                tr(
+                                    "ogni ${formatMs(r.intervalMin * 60_000L)} · prossimo tra ${formatMs(remaining)}",
+                                    "every ${formatMs(r.intervalMin * 60_000L)} · next in ${formatMs(remaining)}",
+                                )
+                            } else {
+                                tr(
+                                    "tra ${formatMs(remaining)} · alle ${formatTimeOfDay(at.hour * 60 + at.minute)}",
+                                    "in ${formatMs(remaining)} · at ${formatTimeOfDay(at.hour * 60 + at.minute)}",
+                                )
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

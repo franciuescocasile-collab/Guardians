@@ -509,8 +509,10 @@ private fun SnowfallOverlay(intensity: Float, modifier: Modifier = Modifier) {
         val w = size.width
         val h = size.height
         val count = (8 + 82 * k).toInt().coerceAtMost(flakes.size)
-        // La VELOCITÀ di caduta cresce molto con k (0.18 → 1.4 giri/sec).
-        val fallSpeed = 0.18f + 1.25f * k
+        // La VELOCITÀ di caduta cresce con k, ma con tetto DIMEZZATO: la massima
+        // (timer al massimo) è quella che prima si aveva a ~60 min (1). Quantità,
+        // vento e brina restano invariati.
+        val fallSpeed = 0.18f + 0.62f * k
         // La brezza: deriva laterale e oscillazione, più forti col timer.
         val drift = w * (0.10f + 0.9f * k)
         val swayAmp = w * (0.02f + 0.07f * k)

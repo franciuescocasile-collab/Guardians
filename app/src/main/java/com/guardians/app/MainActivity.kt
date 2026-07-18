@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -395,15 +396,22 @@ private fun GuardiansNav() {
     // Es.: home → squadre → squadra → indietro → squadre → indietro → home.
     val backStack = remember { mutableStateListOf(Screen.HUB) }
     val screen = backStack.last()
+    // Direzione dell'ultima navigazione, per lo slide (8): avanti = entra da
+    // destra, indietro = entra da sinistra.
+    var forward by remember { mutableStateOf(true) }
 
     fun navigate(to: Screen) {
-        if (backStack.last() != to) backStack.add(to)
+        if (backStack.last() != to) {
+            forward = true
+            backStack.add(to)
+        }
     }
 
     fun goBack() {
         if (backStack.size <= 1) return
         // Uscendo dall'editor la bozza si scarta (salvataggi già fatti in onSave).
         if (backStack.last() == Screen.EDIT) draft = null
+        forward = false
         backStack.removeAt(backStack.lastIndex)
     }
 
@@ -414,7 +422,23 @@ private fun GuardiansNav() {
     SealRepository.waitReadyAt.collectAsState().value
     val sealed = !SealRepository.canEditNow()
 
-    when (screen) {
+    androidx.compose.animation.AnimatedContent(
+        targetState = screen,
+        transitionSpec = {
+            val dir = if (forward) 1 else -1
+            (androidx.compose.animation.slideInHorizontally(
+                animationSpec = androidx.compose.animation.core.tween(300),
+            ) { full -> full * dir } + androidx.compose.animation.fadeIn(
+                androidx.compose.animation.core.tween(300),
+            )) togetherWith (androidx.compose.animation.slideOutHorizontally(
+                animationSpec = androidx.compose.animation.core.tween(300),
+            ) { full -> -full * dir } + androidx.compose.animation.fadeOut(
+                androidx.compose.animation.core.tween(300),
+            ))
+        },
+        label = "screenSlide",
+    ) { scr ->
+    when (scr) {
         Screen.HUB -> HubScreen(
             onCreateTimer = {
                 draft = TimerDraft.new()
@@ -571,6 +595,7 @@ private fun GuardiansNav() {
             },
             title = com.guardians.app.data.tr("App da sorvegliare", "Apps to watch"),
         )
+    }
     }
 }
 

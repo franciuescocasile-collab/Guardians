@@ -31,9 +31,13 @@ object NotifierRepository {
     data class Reminder(
         val id: String,
         val text: String,
-        /** Istante di scatto (epoch ms). */
+        /** Istante del prossimo scatto (epoch ms). */
         val fireAt: Long,
-    )
+        /** Ripetizione in minuti (0 = una volta sola). Es. 120 = ogni 2 ore. */
+        val intervalMin: Int = 0,
+    ) {
+        val recurring: Boolean get() = intervalMin > 0
+    }
 
     private val _reminders = MutableStateFlow<List<Reminder>>(emptyList())
     val reminders: StateFlow<List<Reminder>> = _reminders
@@ -55,22 +59,44 @@ object NotifierRepository {
         _nightFrom.value = p.getInt(KEY_NIGHT_FROM, 23 * 60)
         _nightTo.value = p.getInt(KEY_NIGHT_TO, 7 * 60)
         p.getString(KEY_REMINDERS, null)?.let { raw ->
-            _reminders.value = try {
+            val parsed = try {
                 val arr = JSONArray(raw)
                 (0 until arr.length()).map { i ->
                     val o = arr.getJSONObject(i)
-                    Reminder(o.getString("id"), o.getString("text"), o.getLong("fireAt"))
-                }.filter { it.fireAt > System.currentTimeMillis() }   // scaduti = via
+                    Reminder(
+                        o.getString("id"), o.getString("text"), o.getLong("fireAt"),
+                        o.optInt("intervalMin", 0),
+                    )
+                }
             } catch (_: Exception) {
                 emptyList()
             }
+            // Pulizia all'avvio: i one-shot scaduti si buttano; i RICORRENTI si
+            // fanno avanzare al prossimo scatto futuro. Poi si ri-armano tutti
+            // (dopo un riavvio del telefono gli allarmi vanno rimessi).
+            val now = System.currentTimeMillis()
+            val cleaned = parsed.mapNotNull { r ->
+                if (!r.recurring) {
+                    if (r.fireAt > now) r else null
+                } else {
+                    var f = r.fireAt
+                    val stepMs = r.intervalMin * 60_000L
+                    while (f <= now) f += stepMs
+                    r.copy(fireAt = f)
+                }
+            }
+            persist(context, cleaned)
+            cleaned.forEach { setAlarm(context, it) }
         }
     }
 
-    /** Pianifica un promemoria per [fireAt]; programma anche l'allarme di sistema. */
-    fun schedule(context: Context, text: String, fireAt: Long) {
+    /**
+     * Pianifica un promemoria per [fireAt]; se [intervalMin] > 0 è RICORRENTE
+     * (si ripete ogni tot). Programma anche l'allarme di sistema.
+     */
+    fun schedule(context: Context, text: String, fireAt: Long, intervalMin: Int = 0) {
         load(context)
-        val r = Reminder(UUID.randomUUID().toString(), text.trim(), fireAt)
+        val r = Reminder(UUID.randomUUID().toString(), text.trim(), fireAt, intervalMin)
         persist(context, _reminders.value + r)
         setAlarm(context, r)
     }
@@ -83,12 +109,22 @@ object NotifierRepository {
     }
 
     /**
-     * Chiamato dal receiver dopo aver mostrato la notifica: rimuove il record
-     * (auto-distruzione). L'allarme è già scattato, non serve cancellarlo.
+     * Chiamato dal receiver dopo aver mostrato la notifica. Un promemoria USA E
+     * GETTA si auto-distrugge; uno RICORRENTE riprogramma il prossimo scatto.
      */
-    fun consume(context: Context, id: String) {
+    fun onFired(context: Context, id: String) {
         load(context)
-        persist(context, _reminders.value.filterNot { it.id == id })
+        val r = _reminders.value.firstOrNull { it.id == id } ?: return
+        if (!r.recurring) {
+            persist(context, _reminders.value.filterNot { it.id == id })
+            return
+        }
+        var next = r.fireAt + r.intervalMin * 60_000L
+        val now = System.currentTimeMillis()
+        while (next <= now) next += r.intervalMin * 60_000L
+        val updated = r.copy(fireAt = next)
+        persist(context, _reminders.value.map { if (it.id == id) updated else it })
+        setAlarm(context, updated)
     }
 
     /** True se ORA rientra nella fascia notturna silenziata. */
@@ -158,6 +194,7 @@ object NotifierRepository {
                 put("id", r.id)
                 put("text", r.text)
                 put("fireAt", r.fireAt)
+                put("intervalMin", r.intervalMin)
             })
         }
         prefs(context).edit().putString(KEY_REMINDERS, arr.toString()).apply()

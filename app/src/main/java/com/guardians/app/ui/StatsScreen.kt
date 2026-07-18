@@ -5,6 +5,8 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -74,6 +77,8 @@ private class TopApp(
     val icon: androidx.compose.ui.graphics.ImageBitmap?,
     /** Colore ARGB della categoria (il pallino accanto all'icona). */
     val categoryColor: Long,
+    /** Il pacchetto: serve per riassegnare la categoria a mano (7). */
+    val packageName: String = "",
 )
 
 /** Riepilogo dell'uso del telefono letto da UsageStatsManager. */
@@ -516,164 +521,48 @@ internal fun SleepConnectCard() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    // Il grafico Distacco → Sonno (unico), sotto l'ultima dormita.
-                    Spacer(Modifier.height(16.dp))
-                    androidx.compose.material3.HorizontalDivider(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    WindDownSection(nights)
+                    // Solo due numeri chiari, non più il "muro" di prima (9.1):
+                    // quanto hai staccato il telefono prima di dormire, stanotte e
+                    // in media. "Distacco" = minuti tra telefono posato e sonno.
+                    if (nights.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        androidx.compose.material3.HorizontalDivider(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        val tonight = nights.maxByOrNull { it.sleepOnset }?.gapMinutes
+                        val avgGap = nights.map { it.gapMinutes }.average().toLong()
+                        SleepGapRow(
+                            tr("Distacco di stanotte", "Tonight's detach"),
+                            tonight,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        SleepGapRow(
+                            tr("Distacco medio", "Average detach"),
+                            avgGap,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/**
- * Il legame "Distacco → Sonno": confronta quanto dormi nelle notti in cui posi il
- * telefono ALMENO mezz'ora prima di addormentarti con quelle in cui lo tieni fino
- * all'ultimo. È la prova, sui tuoi dati, che staccare prima fa bene al sonno.
- */
+/** Una riga "Distacco …: N min" (o —), col numero in evidenza. */
 @Composable
-private fun WindDownSection(nights: List<HealthConnectManager.WindDownNight>) {
-    Text(tr("Distacco → Sonno", "Detach → Sleep"), fontWeight = FontWeight.Bold)
-    Spacer(Modifier.height(4.dp))
-    Text(
-        tr(
-            "Quanto tempo posi il telefono prima di addormentarti, e come dormi.",
-            "How long you put the phone down before falling asleep, and how you sleep.",
-        ),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(12.dp))
-
-    if (nights.size < 2) {
+private fun SleepGapRow(label: String, minutes: Long?) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(
-            tr(
-                "Sto raccogliendo le notti: servono ancora qualche sera con il " +
-                    "telefono collegato a Health Connect per mostrare il legame.",
-                "Collecting nights: a few more evenings with the phone connected to " +
-                    "Health Connect are needed to show the link.",
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-
-    val early = nights.filter { it.gapMinutes >= 30 }
-    val late = nights.filter { it.gapMinutes < 30 }
-    val avgEarly = early.map { it.sleepMinutes }.average().takeIf { early.isNotEmpty() } ?: 0.0
-    val avgLate = late.map { it.sleepMinutes }.average().takeIf { late.isNotEmpty() } ?: 0.0
-    val maxAvg = maxOf(avgEarly, avgLate, 1.0)
-
-    WindDownBar(
-        label = tr("Stacco ≥ 30 min prima", "Detach ≥ 30 min before"),
-        avgMinutes = avgEarly,
-        count = early.size,
-        fraction = (avgEarly / maxAvg).toFloat(),
-        strong = true,
-    )
-    Spacer(Modifier.height(8.dp))
-    WindDownBar(
-        label = tr("Stacco < 30 min prima", "Detach < 30 min before"),
-        avgMinutes = avgLate,
-        count = late.size,
-        fraction = (avgLate / maxAvg).toFloat(),
-        strong = false,
-    )
-
-    // La frase-verdetto, solo se abbiamo entrambi i gruppi.
-    if (early.isNotEmpty() && late.isNotEmpty()) {
-        val diff = (avgEarly - avgLate) / 60.0
-        Spacer(Modifier.height(12.dp))
-        Text(
-            if (diff >= 0.1) {
-                tr(
-                    "Quando stacchi almeno mezz'ora prima, dormi in media " +
-                        "%.1f ore in più.".format(diff),
-                    "When you detach at least half an hour earlier, you sleep " +
-                        "%.1f h more on average.".format(diff),
-                )
-            } else {
-                tr(
-                    "Per ora la differenza è piccola: continua a raccogliere notti.",
-                    "The difference is small so far: keep collecting nights.",
-                )
-            },
+            label,
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            if (minutes == null) "—" else formatMs(minutes * 60_000L),
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-        )
-    }
-
-    // Le ultime notti, dalla più recente.
-    Spacer(Modifier.height(14.dp))
-    val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-    val zone = ZoneId.systemDefault()
-    nights.sortedByDescending { it.sleepOnset }.take(5).forEach { n ->
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                n.sleepOnset.atZone(zone).toLocalDate()
-                    .format(java.time.format.DateTimeFormatter.ofPattern("d/M")),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(38.dp),
-            )
-            Text(
-                tr("posato ", "down ") + n.phoneOff.atZone(zone).format(fmt) +
-                    " → " + tr("dormito ", "asleep ") + n.sleepOnset.atZone(zone).format(fmt),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                "${n.gapMinutes}m",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (n.gapMinutes >= 30) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** Una barra del confronto Distacco→Sonno: durata media del sonno di un gruppo. */
-@Composable
-private fun WindDownBar(
-    label: String,
-    avgMinutes: Double,
-    count: Int,
-    fraction: Float,
-    strong: Boolean,
-) {
-    val color = if (strong) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(3.dp))
-            Box(
-                Modifier
-                    .fillMaxWidth(fraction.coerceIn(0.04f, 1f))
-                    .height(14.dp)
-                    .background(color, RoundedCornerShape(4.dp)),
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            if (count == 0) "—" else formatMs((avgMinutes * 60_000L).toLong()),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -1033,13 +922,15 @@ private fun loadUsageSummary(context: Context): UsageSummary {
     }
 
     // Tutte le app di oggi (per la pagina di dettaglio), con colore categoria.
+    // La categoria è quella EFFETTIVA: override dell'utente, sennò il default (7).
     val allApps = todayPerApp.entries
         .sortedByDescending { it.value }
         .filter { it.value >= 30_000L }  // sotto i 30s è rumore
         .map {
             TopApp(
                 label(it.key), it.value, icon(it.key),
-                com.guardians.app.model.categoryOf(context, it.key).colorArgb,
+                com.guardians.app.data.CategoryRepository.resolve(context, it.key).colorArgb,
+                packageName = it.key,
             )
         }
     val topApps = allApps.take(4)
@@ -1317,10 +1208,22 @@ private fun AppUsageRow(app: TopApp, maxMs: Long) {
 /**
  * Il dettaglio con l'uso di OGNI app di oggi (14.1): così si vede anche cosa
  * arriva da Maps, Spotify, Android Auto e simili. Pallino = categoria.
+ * Tocca un'app per SCEGLIERNE la categoria — anche una creata da te (7).
  */
 @Composable
 private fun AllAppsDetail(apps: List<TopApp>, onBack: () -> Unit) {
     androidx.activity.compose.BackHandler { onBack() }
+    val context = LocalContext.current
+    com.guardians.app.data.CategoryRepository.load(context)
+    // L'app di cui si sta scegliendo la categoria (dialog aperto).
+    var editingPkg by remember { mutableStateOf<TopApp?>(null) }
+    // Gli override cambiati IN QUESTA schermata: ricolorano subito i pallini.
+    val overrides by com.guardians.app.data.CategoryRepository.overrides.collectAsState()
+
+    editingPkg?.let { app ->
+        CategoryPickerDialog(app = app, onDismiss = { editingPkg = null })
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1334,11 +1237,21 @@ private fun AllAppsDetail(apps: List<TopApp>, onBack: () -> Unit) {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
                 }
-                Text(
-                    tr("Tutte le app di oggi", "All of today's apps"),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                Column {
+                    Text(
+                        tr("Tutte le app di oggi", "All of today's apps"),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        tr(
+                            "Tocca un'app per cambiarne la categoria",
+                            "Tap an app to change its category",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
         if (apps.isEmpty()) {
@@ -1352,7 +1265,186 @@ private fun AllAppsDetail(apps: List<TopApp>, onBack: () -> Unit) {
             }
         } else {
             val maxMs = apps.first().ms.coerceAtLeast(1L)
-            items(apps.size) { i -> AppUsageRow(apps[i], maxMs) }
+            items(apps.size) { i ->
+                val app = apps[i]
+                // Il colore segue l'override più recente (overrides fa ricomporre).
+                val liveColor = remember(app.packageName, overrides) {
+                    com.guardians.app.data.CategoryRepository
+                        .resolve(context, app.packageName).colorArgb
+                }
+                Box(
+                    Modifier.clickable { editingPkg = app },
+                ) {
+                    AppUsageRow(
+                        TopApp(app.label, app.ms, app.icon, liveColor, app.packageName),
+                        maxMs,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Scelta della categoria di un'app (7): le predefinite, le TUE categorie e
+ * "Crea nuova categoria" (nome + colore a scelta). "Predefinita" torna
+ * all'assegnazione automatica.
+ */
+@Composable
+private fun CategoryPickerDialog(app: TopApp, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val custom by com.guardians.app.data.CategoryRepository.custom.collectAsState()
+    val current = com.guardians.app.data.CategoryRepository
+        .resolve(context, app.packageName).key
+    var creating by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+    var newColor by remember { mutableStateOf(0xFFFF7043) }
+    // Colori proposti per le categorie nuove (tinte non già usate).
+    val palette = listOf(
+        0xFFFF7043, 0xFFFFCA28, 0xFF9CCC65, 0xFF4DB6AC,
+        0xFF4FC3F7, 0xFF7986CB, 0xFFBA68C8, 0xFFF06292,
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(tr("Categoria di ${app.label}", "Category for ${app.label}")) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (!creating) {
+                    // "Predefinita" = torna all'automatico.
+                    CategoryChoiceRow(
+                        label = tr("Predefinita (automatica)", "Default (automatic)"),
+                        colorArgb = com.guardians.app.model
+                            .categoryOf(context, app.packageName).colorArgb,
+                        selected = com.guardians.app.data.CategoryRepository.overrides
+                            .collectAsState().value[app.packageName] == null,
+                        onClick = {
+                            com.guardians.app.data.CategoryRepository
+                                .setOverride(context, app.packageName, null)
+                            onDismiss()
+                        },
+                    )
+                    com.guardians.app.model.AppCategory.entries.forEach { cat ->
+                        val key = com.guardians.app.data.CategoryRepository.builtinKey(cat)
+                        CategoryChoiceRow(
+                            label = cat.label,
+                            colorArgb = cat.colorArgb,
+                            selected = current == key,
+                            onClick = {
+                                com.guardians.app.data.CategoryRepository
+                                    .setOverride(context, app.packageName, key)
+                                onDismiss()
+                            },
+                        )
+                    }
+                    custom.forEach { c ->
+                        CategoryChoiceRow(
+                            label = c.name,
+                            colorArgb = c.colorArgb,
+                            selected = current == "c:${c.id}",
+                            onClick = {
+                                com.guardians.app.data.CategoryRepository
+                                    .setOverride(context, app.packageName, "c:${c.id}")
+                                onDismiss()
+                            },
+                        )
+                    }
+                    TextButton(onClick = { creating = true }) {
+                        Text(tr("Crea nuova categoria…", "Create new category…"))
+                    }
+                } else {
+                    // Creazione di una categoria TUTTA TUA: nome + colore.
+                    androidx.compose.material3.OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        label = { Text(tr("Nome categoria", "Category name")) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        palette.forEach { c ->
+                            Box(
+                                Modifier
+                                    .size(30.dp)
+                                    .background(
+                                        Color(c),
+                                        androidx.compose.foundation.shape.CircleShape,
+                                    )
+                                    .then(
+                                        if (newColor == c) {
+                                            Modifier.border(
+                                                3.dp,
+                                                MaterialTheme.colorScheme.onSurface,
+                                                androidx.compose.foundation.shape.CircleShape,
+                                            )
+                                        } else {
+                                            Modifier
+                                        },
+                                    )
+                                    .clickable { newColor = c },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (creating) {
+                TextButton(
+                    enabled = newName.isNotBlank(),
+                    onClick = {
+                        val key = com.guardians.app.data.CategoryRepository
+                            .addCustom(context, newName, newColor)
+                        com.guardians.app.data.CategoryRepository
+                            .setOverride(context, app.packageName, key)
+                        onDismiss()
+                    },
+                ) { Text(tr("Crea e assegna", "Create and assign")) }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { if (creating) creating = false else onDismiss() }) {
+                Text(if (creating) tr("Indietro", "Back") else tr("Chiudi", "Close"))
+            }
+        },
+    )
+}
+
+/** Una riga di scelta categoria: pallino colorato + nome + spunta se attiva. */
+@Composable
+private fun CategoryChoiceRow(
+    label: String,
+    colorArgb: Long,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+    ) {
+        Box(
+            Modifier
+                .size(14.dp)
+                .background(Color(colorArgb), androidx.compose.foundation.shape.CircleShape),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f),
+        )
+        if (selected) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

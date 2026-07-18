@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -71,17 +74,28 @@ fun BouncyCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    // Anche un tap veloce si sente: la card si schiaccia di più (0.93) e al
-    // rilascio RIMBALZA (molla poco smorzata, con overshoot) — 4.
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.93f else 1f,
-        animationSpec = spring(dampingRatio = 0.34f, stiffness = 620f),
-        label = "pressScale",
-    )
+    // Effetto pulsante SEMPRE percepibile, anche sul tap più rapido (3): appena
+    // premi si schiaccia SUBITO (60 ms), al rilascio RIMBALZA con la molla. Con
+    // Animatable la "schiacciata" parte sempre, poi si torna su — così si vede
+    // sia sul tocco veloce sia sulla pressione prolungata.
+    val scale = remember { androidx.compose.animation.core.Animatable(1f) }
+    androidx.compose.runtime.LaunchedEffect(pressed) {
+        if (pressed) {
+            scale.animateTo(
+                0.9f,
+                androidx.compose.animation.core.tween(60),
+            )
+        } else {
+            scale.animateTo(
+                1f,
+                spring(dampingRatio = 0.38f, stiffness = 520f),
+            )
+        }
+    }
     Card(
         colors = colors,
         modifier = modifier
-            .scale(scale)
+            .scale(scale.value)
             .clip(MaterialTheme.shapes.medium)
             .combinedClickable(
                 interactionSource = interaction,
@@ -91,6 +105,73 @@ fun BouncyCard(
             ),
         content = content,
     )
+}
+
+/**
+ * La fiamma dello streak IN MOVIMENTO (5): contorno arancione sottile, numero
+ * dei giorni al centro, punta che guizza e corpo che "respira". Condivisa tra
+ * home e profilo.
+ */
+@Composable
+fun StreakFlame(streak: Int, modifier: Modifier = Modifier) {
+    val outline = Color(0xFFFF7A2E)
+    val number = Color(0xFFFFB74D)
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "flame")
+    val flick by t.animateFloat(
+        initialValue = -1f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                820, easing = androidx.compose.animation.core.FastOutSlowInEasing,
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "flick",
+    )
+    val breathe by t.animateFloat(
+        initialValue = 0.93f, targetValue = 1.07f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                640, easing = androidx.compose.animation.core.FastOutSlowInEasing,
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "breathe",
+    )
+    Box(contentAlignment = androidx.compose.ui.Alignment.Center, modifier = modifier) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val cx = w / 2f
+            val tipX = cx + flick * w * 0.10f
+            val topY = h * (0.14f - (breathe - 1f) * 0.4f)
+            val baseY = h * 0.92f
+            val midY = h * 0.56f
+            val path = Path().apply {
+                moveTo(cx, baseY)
+                cubicTo(w * 0.06f, midY + 6f, w * 0.24f, midY, tipX, topY)
+                cubicTo(w * 0.76f, midY, w * 0.94f, midY + 6f, cx, baseY)
+                close()
+            }
+            drawPath(path, outline.copy(alpha = 0.10f))
+            drawPath(
+                path, outline,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 2.4f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                ),
+            )
+        }
+        androidx.compose.material3.Text(
+            streak.toString(),
+            fontSize = androidx.compose.ui.unit.TextUnit(
+                12f, androidx.compose.ui.unit.TextUnitType.Sp,
+            ),
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = number,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
 }
 
 /**

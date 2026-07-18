@@ -41,8 +41,8 @@ class ReminderReceiver : BroadcastReceiver() {
         } catch (_: Exception) {
         }
 
-        // Auto-distruzione: il record sparisce dal DB locale.
-        NotifierRepository.consume(context, id)
+        // One-shot → auto-distruzione; ricorrente → riprogramma il prossimo.
+        NotifierRepository.onFired(context, id)
     }
 
     private fun ensureChannel(context: Context, id: String, silent: Boolean) {

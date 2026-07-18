@@ -324,14 +324,27 @@ fun UserProfileScreen(
         }
         val avgMs = UsageHistoryRepository.dailyAverageMs()
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            MetricTile(
-                big = "🔥 $streak",
-                label = tr(
-                    "Giorni consecutivi obiettivo raggiunto",
-                    "Consecutive days goal met",
-                ),
+            // La stessa fiamma animata della home, ma grande (5).
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 modifier = Modifier.weight(1f),
-            )
+            ) {
+                Column(
+                    Modifier.padding(16.dp).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    StreakFlame(streak, Modifier.size(56.dp))
+                    Text(
+                        tr(
+                            "Giorni consecutivi obiettivo raggiunto",
+                            "Consecutive days goal met",
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
             MetricTile(
                 big = if (avgMs > 0L) formatMs(avgMs) else "—",
                 label = tr(

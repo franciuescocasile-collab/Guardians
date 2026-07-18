@@ -29,6 +29,35 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.13.0",
+            "Slide tra le pagine, categorie tue e promemoria ricorrenti",
+            "Page slides, your own categories and recurring reminders",
+            "L'app ora SCORRE: entri in una pagina e arriva da destra, torni " +
+                "indietro e scivola via. Il tocco sulle card si sente davvero " +
+                "(schiaccia e rimbalza, anche sul tap veloce) e il trascinamento " +
+                "delle card segue il dito, spostandosi di più posizioni in un " +
+                "colpo. In \"Tutte le app di oggi\" tocchi un'app e le CAMBI " +
+                "categoria — o ne CREI una tutta tua, con nome e colore. Il " +
+                "Notificatore impara i promemoria RICORRENTI (\"bevi acqua ogni " +
+                "2 ore\": lo imposti una volta sola). La card Sonno è pulita: " +
+                "ultima dormita, distacco di stanotte e distacco medio; il voto " +
+                "del sonno ora premia la QUALITÀ (fasi) più della durata. La " +
+                "neve è tornata a velocità umana, la fiamma animata vive anche " +
+                "nel profilo e l'icona dell'app ha lo scudo stondato.",
+            "The app now SLIDES: enter a page and it comes from the right, go " +
+                "back and it slips away. Card presses truly feel like presses " +
+                "(squash and bounce, even on quick taps) and dragging cards " +
+                "follows your finger, jumping several positions at once. In " +
+                "\"All of today's apps\" tap an app to CHANGE its category — or " +
+                "CREATE your own, with a name and color. The Notifier learns " +
+                "RECURRING reminders (\"drink water every 2 hours\": set it " +
+                "once). The Sleep card is clean: last night, tonight's detach " +
+                "and average detach; the sleep score now rewards QUALITY " +
+                "(stages) over duration. Snow is back to human speed, the " +
+                "animated flame lives in the profile too and the app icon got " +
+                "its rounded shield.",
+        ),
+        NewsItem(
             "3.12.0",
             "Colore dell'app, nuova icona e tanti ritocchi",
             "App color, new icon and lots of polish",

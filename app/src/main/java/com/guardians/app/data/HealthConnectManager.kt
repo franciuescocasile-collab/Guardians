@@ -105,19 +105,21 @@ object HealthConnectManager {
     )
 
     /**
-     * Voto del sonno 0..100: fino a 70 punti dalla DURATA (pieni tra 7 e 9 ore)
-     * e fino a 30 dalle FASI (profondo ~20% e REM ~22% del totale). Senza fasi
-     * (niente smartwatch) il voto è riscalato sulla sola durata.
+     * Voto del sonno 0..100 che premia soprattutto la QUALITÀ (9.3): quando lo
+     * smartwatch fornisce le fasi, 55 punti vengono da profondo (~20%) e REM
+     * (~22%) e solo 45 dalla durata (pieni tra 7 e 9 ore). Senza fasi (niente
+     * smartwatch) il voto si basa per forza sulla sola durata.
      */
     private fun sleepScore(record: SleepSessionRecord): Int {
         val durMs = java.time.Duration.between(record.startTime, record.endTime)
             .toMillis().coerceAtLeast(0L)
         val durH = durMs / 3_600_000.0
-        val durationScore = when {
-            durH in 7.0..9.0 -> 70.0
-            durH < 7.0 -> 70.0 * (durH / 7.0)
-            else -> (70.0 - (durH - 9.0) * 5.0).coerceAtLeast(50.0)
-        }
+        // Punteggio-durata normalizzato 0..1 (poi pesato diversamente).
+        val durationUnit = when {
+            durH in 7.0..9.0 -> 1.0
+            durH < 7.0 -> (durH / 7.0)
+            else -> (1.0 - (durH - 9.0) * 0.07).coerceAtLeast(0.7)
+        }.coerceIn(0.0, 1.0)
         var deepMs = 0L
         var remMs = 0L
         var stagedMs = 0L
@@ -136,12 +138,13 @@ object HealthConnectManager {
         return if (stagedMs > 0L && durMs > 0L) {
             val deepRatio = deepMs.toDouble() / durMs
             val remRatio = remMs.toDouble() / durMs
-            val phaseScore = 15.0 * (deepRatio / 0.20).coerceAtMost(1.0) +
-                15.0 * (remRatio / 0.22).coerceAtMost(1.0)
-            (durationScore + phaseScore).toInt().coerceIn(0, 100)
+            // La QUALITÀ pesa più della durata: 30 profondo + 25 REM = 55.
+            val phaseScore = 30.0 * (deepRatio / 0.20).coerceAtMost(1.0) +
+                25.0 * (remRatio / 0.22).coerceAtMost(1.0)
+            (45.0 * durationUnit + phaseScore).toInt().coerceIn(0, 100)
         } else {
             // Niente fasi: la durata vale da sola tutto il voto.
-            (durationScore / 0.7).toInt().coerceIn(0, 100)
+            (100.0 * durationUnit).toInt().coerceIn(0, 100)
         }
     }
 

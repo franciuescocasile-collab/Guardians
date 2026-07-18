@@ -506,7 +506,7 @@ private fun SleepWeekChart(nights: Map<LocalDate, HealthConnectManager.NightScor
                 )
                 // Lo stacco dal telefono di quella sera.
                 Text(
-                    night?.gapMin?.let { "${it}m" } ?: "—",
+                    night?.gapMin?.let { "$it min" } ?: "—",
                     style = MaterialTheme.typography.labelSmall,
                     color = if ((night?.gapMin ?: 0L) >= 30L) {
                         MaterialTheme.colorScheme.primary

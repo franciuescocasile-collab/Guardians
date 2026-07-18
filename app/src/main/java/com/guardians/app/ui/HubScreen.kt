@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
@@ -65,7 +66,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -526,32 +531,40 @@ private fun HomeEditableRow(
         content()
         return
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        // Accumulo continuo: trascinando di più scavalchi più card (5).
-        var acc by remember(cardKey) { mutableStateOf(0f) }
+    // La card SEGUE il dito mentre trascini, e riordina UNA VOLTA al rilascio:
+    // così non si "inceppa" a ogni scavalco (2). Il passo è l'altezza vera della
+    // riga (misurata) più la spaziatura della lista.
+    var dragY by remember(cardKey) { mutableStateOf(0f) }
+    var rowH by remember(cardKey) { mutableStateOf(0f) }
+    val dragging = dragY != 0f
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .onGloballyPositioned { rowH = it.size.height.toFloat() }
+            .offset { IntOffset(0, dragY.roundToInt()) }
+            .zIndex(if (dragging) 1f else 0f),
+    ) {
         Icon(
             Icons.Default.DragHandle,
             contentDescription = tr("Trascina per spostare", "Drag to move"),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (dragging) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .size(34.dp)
                 .pointerInput(cardKey) {
+                    val spacing = 12.dp.toPx()
                     detectVerticalDragGestures(
-                        onDragEnd = { acc = 0f },
-                        onDragCancel = { acc = 0f },
+                        onDragEnd = {
+                            val step = (if (rowH > 0f) rowH else 88.dp.toPx()) + spacing
+                            val steps = (dragY / step).roundToInt()
+                            val dir = if (steps > 0) 1 else -1
+                            repeat(kotlin.math.abs(steps)) { onDragMove(dir) }
+                            dragY = 0f
+                        },
+                        onDragCancel = { dragY = 0f },
                     ) { change, dy ->
                         change.consume()
-                        acc += dy
-                        // Passo = mezza altezza di una card: scorrimento fluido.
-                        val step = 44.dp.toPx()
-                        while (acc >= step) {
-                            onDragMove(1)
-                            acc -= step
-                        }
-                        while (acc <= -step) {
-                            onDragMove(-1)
-                            acc += step
-                        }
+                        dragY += dy
                     }
                 },
         )
@@ -578,77 +591,6 @@ private fun HomeEditableRow(
 /** "1 squadra attiva" / "3 squadre attive": singolare/plurale puliti. */
 private fun plural(n: Int, one: String, many: String): String =
     "$n " + if (n == 1) one else many
-
-/**
- * La fiamma dello streak (23): icona in stile Material come le altre card, ma
- * GRANDE e con il numero dei giorni di fila DENTRO il corpo della fiamma.
- */
-@Composable
-private fun StreakFlame(streak: Int, modifier: Modifier = Modifier) {
-    val outline = Color(0xFFFF7A2E)   // contorno arancione fiamma
-    val number = Color(0xFFFFB74D)    // numero, arancione più chiaro per leggerlo
-    // Fuoco IN MOVIMENTO: la punta guizza e la fiamma "respira" (8).
-    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "flame")
-    val flick by t.animateFloat(
-        initialValue = -1f, targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(
-                820, easing = androidx.compose.animation.core.FastOutSlowInEasing,
-            ),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-        ),
-        label = "flick",
-    )
-    val breathe by t.animateFloat(
-        initialValue = 0.93f, targetValue = 1.07f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(
-                640, easing = androidx.compose.animation.core.FastOutSlowInEasing,
-            ),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-        ),
-        label = "breathe",
-    )
-    Box(contentAlignment = Alignment.Center, modifier = modifier) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val cx = w / 2f
-            val tipX = cx + flick * w * 0.10f
-            val topY = h * (0.14f - (breathe - 1f) * 0.4f)   // la punta sale/scende
-            val baseY = h * 0.92f
-            val midY = h * 0.56f
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(cx, baseY)
-                // lato sinistro, sale a punta
-                cubicTo(w * 0.06f, midY + 6f, w * 0.24f, midY, tipX, topY)
-                // spalla e discesa a destra
-                cubicTo(w * 0.76f, midY, w * 0.94f, midY + 6f, cx, baseY)
-                close()
-            }
-            // Riempimento tenue + contorno SOTTILE (spessore ridotto, 8).
-            drawPath(path, outline.copy(alpha = 0.10f))
-            drawPath(
-                path, outline,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(
-                    width = 2.4f,
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                    join = androidx.compose.ui.graphics.StrokeJoin.Round,
-                ),
-            )
-        }
-        // Il numero al CENTRO del fuoco (niente più medaglietta).
-        Text(
-            streak.toString(),
-            fontSize = androidx.compose.ui.unit.TextUnit(
-                12f, androidx.compose.ui.unit.TextUnitType.Sp,
-            ),
-            fontWeight = FontWeight.Bold,
-            color = number,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-    }
-}
 
 /** Mini barra della condotta per l'header (rosso sx → verde dx, cursore sottile). */
 @Composable
