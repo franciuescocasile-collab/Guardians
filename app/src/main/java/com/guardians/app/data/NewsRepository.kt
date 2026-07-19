@@ -29,6 +29,45 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.15.0",
+            "Grafici rivoluzionati, il Castellano e i Traguardi",
+            "Revolutionized charts, the Castellan and Achievements",
+            "Tempo al telefono rifatto: due sezioni, UTILIZZO (totali) e MEDIA, " +
+                "ognuna con Giornaliero/Settimanale/Mensile/Annuale e il VIAGGIO " +
+                "NEL TEMPO — scorri o usa le frecce per rivedere ieri, la " +
+                "settimana scorsa, gli anni passati. Ora ogni grafico ha i " +
+                "riferimenti orari a lato ben distanziati. Nuovo guardiano: il " +
+                "CASTELLANO, che sigilla le app in certi giorni della settimana " +
+                "(es. lun-ven bloccate, weekend liberi). Nuovi TRAGUARDI: spille " +
+                "colorate che sblocchi con le tue imprese, alcune segrete (vedi " +
+                "lo stemma ma non la missione). Nel profilo, i due riquadri " +
+                "media/giorni hanno la stessa dimensione. La Sentinella ora ha " +
+                "una grazia di 30 secondi: se torni dopo tanto, il conteggio " +
+                "riparte. Home: puoi mettere le card DOVE VUOI (anche statistiche " +
+                "sotto sonno). Congelamento: tasto \"Interrompi\" più pulito, " +
+                "niente scritte al centro, la neve resta calma come quando la " +
+                "imposti. Squadre senza incantesimi. Editor: scegli il tipo e " +
+                "scendi alle opzioni, con una barra divisoria. Scegli le app e " +
+                "torni dov'eri. Lingua nell'angolo in alto a destra all'avvio. " +
+                "Nuova guida sullo shopping online.",
+            "Screen time redone: two sections, USAGE (totals) and AVERAGE, each " +
+                "with Daily/Weekly/Monthly/Yearly and TIME TRAVEL — swipe or use " +
+                "the arrows to revisit yesterday, last week, past years. Every " +
+                "chart now has well-spaced side hour marks. New guardian: the " +
+                "CASTELLAN, which seals apps on certain weekdays (e.g. Mon-Fri " +
+                "blocked, weekends free). New ACHIEVEMENTS: colorful pins you " +
+                "unlock with your feats, some secret (you see the crest but not " +
+                "the mission). In the profile, the average/days tiles are the " +
+                "same size. The Sentinel now has a 30-second grace: come back " +
+                "after a while and the count restarts. Home: put cards WHEREVER " +
+                "you want (even stats under sleep). Freeze: cleaner \"Break it\" " +
+                "button, no center text, snow stays calm like when you set it. " +
+                "Teams without spells. Editor: pick a type and scroll to its " +
+                "options, with a divider. Pick apps and return where you were. " +
+                "Language in the top-right corner at first launch. New online " +
+                "shopping guide.",
+        ),
+        NewsItem(
             "3.14.0",
             "Trascina e le card fanno spazio (e molto altro)",
             "Drag and the cards make room (and much more)",

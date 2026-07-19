@@ -186,10 +186,17 @@ fun CongelamentoScreen(onBack: () -> Unit) {
         )
     }
 
-    // Intensità della brina: cresce con la durata scelta (o è piena in sessione).
-    val frost = if (sessionActive) 0.85f
-    else ((minutes - CIRCLE_MIN).toFloat() / (CIRCLE_MAX - CIRCLE_MIN).toFloat())
-        .coerceIn(0f, 1f)
+    // Intensità della brina/neve: cresce con la durata scelta. In sessione
+    // NON salta a un valore fisso alto (prima 0.85 = tempesta), ma resta la
+    // STESSA di quando l'hai impostata, ricavata dalla durata scelta (3).
+    val frost = if (sessionActive) {
+        val sessionMin = ((freezeUntil - startedAt) / 60_000L).toInt()
+        ((sessionMin - CIRCLE_MIN).toFloat() / (CIRCLE_MAX - CIRCLE_MIN).toFloat())
+            .coerceIn(0f, 1f)
+    } else {
+        ((minutes - CIRCLE_MIN).toFloat() / (CIRCLE_MAX - CIRCLE_MIN).toFloat())
+            .coerceIn(0f, 1f)
+    }
 
     Box(Modifier.fillMaxSize()) {
     // GLASSMORPHISM (20): il fondale ghiacciato SFOCATO c'è SEMPRE — mentre
@@ -262,15 +269,15 @@ fun CongelamentoScreen(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center,
                     )
-                    Text(
-                        if (inOvertime) {
-                            tr("tempo extra conquistato", "extra time conquered")
-                        } else {
-                            tr("al disgelo", "to the thaw")
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // In overtime resta la scritta motivante; durante il conto
+                    // alla rovescia il centro mostra solo il tempo (2).
+                    if (inOvertime) {
+                        Text(
+                            tr("tempo extra conquistato", "extra time conquered"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             if (inOvertime) {
@@ -301,7 +308,7 @@ fun CongelamentoScreen(onBack: () -> Unit) {
                     if (inOvertime) {
                         tr("Termina la sessione", "End the session")
                     } else {
-                        tr("Interrompi (mi arrendo)", "Break it (I give up)")
+                        tr("Interrompi", "Break it")
                     },
                     fontWeight = FontWeight.Bold,
                 )

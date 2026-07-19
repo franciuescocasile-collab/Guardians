@@ -504,6 +504,32 @@ object OverlayManager {
                     path.close()
                     canvas.drawPath(path, paint)
                 }
+
+                // Torre merlata del Castellano.
+                TimerType.CASTELLANO -> {
+                    val left = w * 0.14f
+                    val right = w * 0.86f
+                    val bottom = h * 0.92f
+                    val battTop = h * 0.10f
+                    val battBottom = h * 0.34f
+                    val seg = (right - left) / 5f
+                    val path = Path().apply {
+                        moveTo(left, bottom)
+                        lineTo(left, battTop)
+                        lineTo(left + seg, battTop)
+                        lineTo(left + seg, battBottom)
+                        lineTo(left + 2 * seg, battBottom)
+                        lineTo(left + 2 * seg, battTop)
+                        lineTo(left + 3 * seg, battTop)
+                        lineTo(left + 3 * seg, battBottom)
+                        lineTo(left + 4 * seg, battBottom)
+                        lineTo(left + 4 * seg, battTop)
+                        lineTo(right, battTop)
+                        lineTo(right, bottom)
+                        close()
+                    }
+                    canvas.drawPath(path, paint)
+                }
             }
         }
     }
@@ -563,4 +589,5 @@ private fun guardianOverlayDrawable(type: TimerType): Int? = when (type) {
     TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
     TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
     TimerType.MESSAGGERO -> com.guardians.app.R.drawable.guardian_messaggero
+    TimerType.CASTELLANO -> null
 }

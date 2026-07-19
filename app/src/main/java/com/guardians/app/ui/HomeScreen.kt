@@ -475,7 +475,8 @@ private fun TimerCard(
         TimerType.GUARDIANO -> usage.dailyMs[timer.id] ?: 0L
         TimerType.SENTINELLA -> usage.continuousMs[timer.id] ?: 0L
         TimerType.GENDARME, TimerType.CUSTODE, TimerType.VEDETTA,
-        TimerType.MESSAGGERO, TimerType.ESATTORE, TimerType.ARALDO -> 0L
+        TimerType.MESSAGGERO, TimerType.ESATTORE, TimerType.ARALDO,
+        TimerType.CASTELLANO -> 0L
     }
     val opens = usage.opens[timer.id] ?: 0
     val isBlocked = usage.blocked.contains(timer.id)
@@ -494,7 +495,7 @@ private fun TimerCard(
     val showProgress = when (eff) {
         TimerType.SENTINELLA, TimerType.GUARDIANO, TimerType.GENDARME -> true
         TimerType.CUSTODE, TimerType.VEDETTA, TimerType.MESSAGGERO,
-        TimerType.ESATTORE, TimerType.ARALDO -> false
+        TimerType.ESATTORE, TimerType.ARALDO, TimerType.CASTELLANO -> false
     }
 
     val subtitle = buildString {
@@ -545,6 +546,19 @@ private fun TimerCard(
                         "${timer.limitText} dal risveglio",
                         "${timer.limitText} from wake-up",
                     )
+                }
+                TimerType.CASTELLANO -> {
+                    val loc = if (com.guardians.app.data.SettingsRepository.english.value) {
+                        java.util.Locale.ENGLISH
+                    } else {
+                        java.util.Locale.ITALIAN
+                    }
+                    val days = timer.blockedDays.sorted().joinToString(", ") {
+                        java.time.DayOfWeek.of(it)
+                            .getDisplayName(java.time.format.TextStyle.SHORT, loc)
+                    }
+                    if (days.isBlank()) tr("nessun giorno", "no days")
+                    else tr("sigillato: $days", "sealed: $days")
                 }
                 TimerType.VEDETTA -> ""
             }

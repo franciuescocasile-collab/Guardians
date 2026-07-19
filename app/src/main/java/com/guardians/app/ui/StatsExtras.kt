@@ -1,8 +1,15 @@
 package com.guardians.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +56,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -89,13 +98,99 @@ fun PeriodSelector(selected: StatsPeriod, onSelect: (StatsPeriod) -> Unit) {
     }
 }
 
-/** Le ultime 24 ore, ora per ora (per il grafico Giornaliero). */
-fun hourlySeries(context: android.content.Context): List<Pair<String, Long>> {
+/** Le 24 ore di un GIORNO qualsiasi (oggi, ieri, l'altro ieri…). */
+fun hourlySeriesFor(
+    context: android.content.Context,
+    date: LocalDate,
+): List<Pair<String, Long>> {
     val z = java.time.ZoneId.systemDefault()
-    val dayStart = LocalDate.now().atStartOfDay(z).toInstant().toEpochMilli()
+    val dayStart = date.atStartOfDay(z).toInstant().toEpochMilli()
     val hours = com.guardians.app.data.UsageAnalytics.hourlyTotals(context, dayStart)
     // Un'etichetta per ogni ora (0..23), su una sola riga.
     return (0..23).map { h -> "$h" to hours[h] }
+}
+
+/** Le 24 ore di oggi (scorciatoia). */
+fun hourlySeries(context: android.content.Context): List<Pair<String, Long>> =
+    hourlySeriesFor(context, LocalDate.now())
+
+/**
+ * UTILIZZO della settimana a [weeksBack] settimane fa (0 = questa): un giorno
+ * per barra, dal primo giorno impostato. Futuro = vuoto.
+ */
+fun weekUsageSeries(history: Map<String, Long>, weeksBack: Int): List<Pair<String, Long>> {
+    val locale = if (com.guardians.app.data.SettingsRepository.english.value) Locale.ENGLISH
+    else Locale.ITALIAN
+    val start = currentWeekDates().first().minusWeeks(weeksBack.toLong())
+    return (0..6).map { i ->
+        val date = start.plusDays(i.toLong())
+        val label = date.dayOfWeek.getDisplayName(TextStyle.NARROW, locale).uppercase(locale)
+        label to (history[date.toString()] ?: 0L)
+    }
+}
+
+/** UTILIZZO TOTALE delle ultime 5 settimane di calendario (etichette S#). */
+fun weeksTotalsSeries(history: Map<String, Long>): List<Pair<String, Long>> {
+    val firstDow = if (com.guardians.app.data.SettingsRepository.weekStartMonday.value) {
+        java.time.DayOfWeek.MONDAY
+    } else {
+        java.time.DayOfWeek.SUNDAY
+    }
+    val weekFields = java.time.temporal.WeekFields.of(firstDow, 1)
+    val thisWeekStart = currentWeekDates().first()
+    return (4 downTo 0).map { w ->
+        val start = thisWeekStart.minusWeeks(w.toLong())
+        val total = (0..6).sumOf { i -> history[start.plusDays(i.toLong()).toString()] ?: 0L }
+        "S${start.get(weekFields.weekOfYear())}" to total
+    }
+}
+
+/**
+ * L'anno [yearsBack] anni fa (0 = corrente), Gennaio → Dicembre. [totals]
+ * true = somma del mese (Utilizzo), false = media giornaliera (Media).
+ */
+fun yearSeries(
+    history: Map<String, Long>,
+    yearsBack: Int,
+    totals: Boolean,
+): List<Pair<String, Long>> {
+    val locale = if (com.guardians.app.data.SettingsRepository.english.value) Locale.ENGLISH
+    else Locale.ITALIAN
+    val year = LocalDate.now().year - yearsBack
+    return (1..12).map { m ->
+        val vals = history.entries.mapNotNull { (k, v) ->
+            val d = try { LocalDate.parse(k) } catch (_: Exception) { null }
+            if (d != null && d.year == year && d.monthValue == m) v else null
+        }
+        val value = when {
+            vals.isEmpty() -> 0L
+            totals -> vals.sum()
+            else -> vals.sum() / vals.size
+        }
+        YearMonth.of(year, m).month.getDisplayName(TextStyle.NARROW, locale) to value
+    }
+}
+
+/**
+ * MEDIA per giorno della settimana sulle ULTIME 4 SETTIMANE (28 giorni):
+ * lunedì in media X, martedì Y… nell'ordine del primo giorno impostato.
+ */
+fun dowAverage4wSeries(history: Map<String, Long>): List<Pair<String, Long>> {
+    val locale = if (com.guardians.app.data.SettingsRepository.english.value) Locale.ENGLISH
+    else Locale.ITALIAN
+    val today = LocalDate.now()
+    val sums = HashMap<java.time.DayOfWeek, Pair<Long, Int>>()
+    for (back in 0..27) {
+        val d = today.minusDays(back.toLong())
+        val v = history[d.toString()] ?: continue
+        val cur = sums[d.dayOfWeek] ?: (0L to 0)
+        sums[d.dayOfWeek] = (cur.first + v) to (cur.second + 1)
+    }
+    return currentWeekDates().map { date ->
+        val s = sums[date.dayOfWeek]
+        val label = date.dayOfWeek.getDisplayName(TextStyle.NARROW, locale).uppercase(locale)
+        label to if (s == null || s.second == 0) 0L else s.first / s.second
+    }
 }
 
 /**
@@ -168,6 +263,23 @@ fun yearlySeries(history: Map<String, Long>): List<Pair<String, Long>> {
     }
 }
 
+/**
+ * Sceglie il passo delle righe orizzontali di riferimento in base al massimo,
+ * così ci sono ~3-5 righe leggibili (2h, 4h, 8h… o giorni per i totali grossi).
+ */
+private fun gridStepMs(maxMs: Long): Long {
+    val candidates = listOf(
+        1L, 2L, 4L, 8L, 12L, 24L, 48L, 96L, 168L, 336L, 720L,
+    ).map { it * 3_600_000L }
+    return candidates.firstOrNull { maxMs / it <= 5 } ?: candidates.last()
+}
+
+/** Etichetta di una riga di riferimento: "2h", "4h" o "3g" per i giorni. */
+private fun gridLabel(ms: Long): String {
+    val h = ms / 3_600_000L
+    return if (h >= 24 && h % 24 == 0L) "${h / 24}g" else "${h}h"
+}
+
 /** Grafico a barre generico (periodo), con linea obiettivo tratteggiata opzionale. */
 @Composable
 fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
@@ -181,24 +293,67 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
     val goalColor = Color(0xFF90A4AE).copy(alpha = 0.65f)
     val barColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+    val bandColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
+    val refColor = MaterialTheme.colorScheme.onSurfaceVariant
     val topLabelPad = 16f  // spazio riservato in cima per il minutaggio
     // Stessa altezza del grafico giornaliero (150dp), così passando da un
     // periodo all'altro il grafico non "salta" di dimensione (stat 8).
     val barH = 134f + topLabelPad
+    // Spazio a SINISTRA per le etichette orarie (stat 1: "fai spazio").
+    val leftPad = 30f
+    val n = series.size
     Column {
-        // Area barre a ALTEZZA FISSA: tutte le basi sono allineate sullo stesso
-        // asse (la riga inferiore). I valori sopra le barre sono in giallo.
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(barH.dp),
         ) {
+            // SFONDO (2.6.1): bande di colonna alternate + righe orarie di
+            // riferimento con etichetta a sinistra, così le barre non sembrano
+            // messe a caso.
+            Canvas(Modifier.fillMaxSize()) {
+                val plotTop = topLabelPad
+                val plotH = size.height - plotTop
+                val colAreaW = size.width - leftPad
+                val colW = colAreaW / n
+                // Bande alternate.
+                for (i in 0 until n step 2) {
+                    drawRect(
+                        color = bandColor,
+                        topLeft = Offset(leftPad + colW * i, plotTop),
+                        size = androidx.compose.ui.geometry.Size(colW, plotH),
+                    )
+                }
+                // Righe orarie.
+                val step = gridStepMs(maxMs)
+                val labelPaint = android.graphics.Paint().apply {
+                    color = refColor.copy(alpha = 0.7f).toArgb()
+                    textSize = 9.dp.toPx()
+                    isAntiAlias = true
+                }
+                var v = step
+                while (v < maxMs) {
+                    val frac = (v.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f)
+                    val y = plotTop + plotH * (1f - frac)
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(leftPad, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1.5f,
+                    )
+                    drawContext.canvas.nativeCanvas.drawText(
+                        gridLabel(v), 2.dp.toPx(), y - 2.dp.toPx(), labelPaint,
+                    )
+                    v += step
+                }
+            }
+            // Area barre, spostata a destra per lasciare spazio alle etichette.
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = topLabelPad.dp),
+                    .padding(start = leftPad.dp, top = topLabelPad.dp),
             ) {
                 series.forEach { (_, ms) ->
                     Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
@@ -237,7 +392,7 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                 Canvas(
                     Modifier
                         .align(Alignment.BottomStart)
-                        .padding(bottom = ((barH - topLabelPad) * goalFrac).dp)
+                        .padding(start = leftPad.dp, bottom = ((barH - topLabelPad) * goalFrac).dp)
                         .fillMaxWidth()
                         .height(2.dp),
                 ) {
@@ -252,13 +407,16 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                 }
             }
             // Asse di base allineato.
-            Canvas(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(1.dp)) {
+            Canvas(Modifier.align(Alignment.BottomStart).padding(start = leftPad.dp).fillMaxWidth().height(1.dp)) {
                 drawLine(gridColor, Offset(0f, 0f), Offset(size.width, 0f), 2f)
             }
         }
         Spacer(Modifier.height(4.dp))
-        // Etichette a una sola riga sotto ogni barra.
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+        // Etichette a una sola riga sotto ogni barra (allineate all'area barre).
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = leftPad.dp),
+        ) {
             series.forEach { (label, _) ->
                 Text(
                     label,
@@ -274,10 +432,139 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
     }
 }
 
+/** Un modo di vedere i dati dentro una sezione (Utilizzo o Media). */
+private enum class ChartMode { DAILY, WEEKLY, MONTHLY, YEARLY }
+
 /**
- * 3° livello — "Tempo al telefono": grafico a LINEA con carosello a swipe
- * (giornaliero/settimanale/mensile) e calendario dell'obiettivo con istantanee
- * immutabili (verde sotto la soglia, rosso sopra).
+ * Grafico con VIAGGIO NEL TEMPO (2.5): trascina verso DESTRA per andare
+ * indietro nel tempo, verso sinistra per tornare avanti. [maxBack] = quante
+ * volte si può andare indietro (0 = niente swipe). [label] descrive il periodo
+ * mostrato, [chart] lo disegna.
+ */
+@Composable
+private fun TimeTravelChart(
+    maxBack: Int,
+    label: (Int) -> String,
+    chart: @Composable (Int) -> Unit,
+) {
+    var back by remember(maxBack) { mutableStateOf(0) }
+    // Direzione dell'animazione: +1 = indietro nel tempo (entra da sinistra).
+    var dir by remember { mutableStateOf(0) }
+    Column {
+        // Etichetta del periodo + frecce (le frecce aiutano chi non scopre lo swipe).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            IconButton(
+                onClick = { if (back < maxBack) { dir = 1; back++ } },
+                enabled = maxBack > 0 && back < maxBack,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = tr("Indietro nel tempo", "Back in time"),
+                    tint = if (maxBack > 0 && back < maxBack) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    },
+                )
+            }
+            Text(
+                label(back),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = { if (back > 0) { dir = -1; back-- } },
+                enabled = back > 0,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = tr("Avanti nel tempo", "Forward in time"),
+                    tint = if (back > 0) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    },
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        // Il grafico, con swipe orizzontale per il viaggio nel tempo. Lo swipe
+        // cambia lo stato una sola volta per gesto (una soglia + un flag).
+        var handled by remember { mutableStateOf(false) }
+        val swipe = Modifier.pointerInput(maxBack) {
+            detectHorizontalDragGestures(
+                onDragStart = { handled = false },
+                onDragEnd = { handled = false },
+            ) { change, dragAmount ->
+                change.consume()
+                if (!handled) {
+                    if (dragAmount > 24f && back < maxBack) { dir = 1; back++; handled = true }
+                    else if (dragAmount < -24f && back > 0) { dir = -1; back--; handled = true }
+                }
+            }
+        }
+        AnimatedContent(
+            targetState = back,
+            transitionSpec = {
+                val d = if (dir != 0) dir else 1
+                (slideInHorizontally { w -> -d * w } + fadeIn()) togetherWith
+                    (slideOutHorizontally { w -> d * w } + fadeOut())
+            },
+            label = "timeTravel",
+            modifier = swipe,
+        ) { b ->
+            chart(b)
+        }
+    }
+}
+
+/** Le tre/quattro linguette di scelta della modalità, in stile "segmenti". */
+@Composable
+private fun ModeTabs(
+    modes: List<Pair<ChartMode, String>>,
+    selected: ChartMode,
+    onSelect: (ChartMode) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        modes.forEach { (mode, label) ->
+            val active = mode == selected
+            Box(
+                Modifier
+                    .weight(1f)
+                    .background(
+                        if (active) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(10.dp),
+                    )
+                    .clickable { onSelect(mode) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                    color = if (active) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 3° livello — "Tempo al telefono", rivoluzionato (2.1-2.5): due sezioni,
+ * UTILIZZO (totali) sopra e MEDIA sotto, ognuna con le sue modalità e il
+ * viaggio nel tempo. Sotto, il calendario dell'obiettivo.
  */
 @Composable
 fun StatsTimeDetail(onBack: () -> Unit) {
@@ -309,69 +596,134 @@ fun StatsTimeDetail(onBack: () -> Unit) {
             )
         }
 
-        // ---------------------------------------------- carosello dei grafici
-        // Giornaliero = LINEA interattiva (tocca un pallino per il dettaglio);
-        // Settimanale, Mensile e Annuale = BARRE. Le linguette sono cliccabili
-        // oltre allo swipe.
+        // ============================================ SEZIONE UTILIZZO (totali)
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(16.dp)) {
-                val titles = listOf(
-                    tr("Giornaliero", "Daily"),
-                    tr("Settimanale", "Weekly"),
-                    tr("Mensile", "Monthly"),
-                    tr("Annuale", "Yearly"),
+                Text(tr("Utilizzo", "Usage"), fontWeight = FontWeight.Bold)
+                Text(
+                    tr(
+                        "Quanto hai usato il telefono in totale.",
+                        "How much you used your phone in total.",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                val pager = rememberPagerState(pageCount = { 4 })
-                val scope = androidx.compose.runtime.rememberCoroutineScope()
-                Text(tr("Andamento", "Trend"), fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    titles.forEachIndexed { i, t ->
-                        Text(
-                            t,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (pager.currentPage == i) FontWeight.Bold
-                            else FontWeight.Normal,
-                            color = if (pager.currentPage == i) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.clickable {
-                                scope.launch { pager.animateScrollToPage(i) }
-                            },
-                        )
-                    }
-                }
                 Spacer(Modifier.height(12.dp))
-                HorizontalPager(state = pager) { page ->
-                    when (page) {
-                        // Ore di oggi, 00 → 23 (la fascia 23-00 è l'ULTIMO punto
-                        // a destra). Tocca un pallino per il minutaggio dell'ora.
-                        0 -> HourLineChart(hourlySeries(context))
-                        1 -> PeriodBarChart(last7DaysSeries(history), 0L)
-                        2 -> PeriodBarChart(weeksSeries(history), 0L)
-                        else -> PeriodBarChart(yearlySeries(history), 0L)
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                // Page indicators: 4 cerchi, quello attivo più grande e illuminato.
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Spacer(Modifier.weight(1f))
-                    for (i in 0 until 4) {
-                        val active = pager.currentPage == i
-                        Box(
-                            Modifier
-                                .size(if (active) 10.dp else 7.dp)
-                                .background(
-                                    if (active) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                                    CircleShape,
-                                )
+                var mode by remember { mutableStateOf(ChartMode.DAILY) }
+                ModeTabs(
+                    modes = listOf(
+                        ChartMode.DAILY to tr("Giornaliero", "Daily"),
+                        ChartMode.WEEKLY to tr("Settimanale", "Weekly"),
+                        ChartMode.MONTHLY to tr("Mensile", "Monthly"),
+                        ChartMode.YEARLY to tr("Annuale", "Yearly"),
+                    ),
+                    selected = mode,
+                    onSelect = { mode = it },
+                )
+                Spacer(Modifier.height(12.dp))
+                when (mode) {
+                    ChartMode.DAILY -> TimeTravelChart(
+                        maxBack = 2,
+                        label = { b ->
+                            when (b) {
+                                0 -> tr("Oggi", "Today")
+                                1 -> tr("Ieri", "Yesterday")
+                                else -> tr("L'altro ieri", "Two days ago")
+                            }
+                        },
+                    ) { b ->
+                        HourLineChart(
+                            hourlySeriesFor(context, LocalDate.now().minusDays(b.toLong())),
+                            cutAtNow = b == 0,
                         )
                     }
-                    Spacer(Modifier.weight(1f))
+
+                    ChartMode.WEEKLY -> TimeTravelChart(
+                        maxBack = 1,
+                        label = { b ->
+                            if (b == 0) tr("Questa settimana", "This week")
+                            else tr("Settimana scorsa", "Last week")
+                        },
+                    ) { b ->
+                        PeriodBarChart(weekUsageSeries(history, b), 0L)
+                    }
+
+                    ChartMode.MONTHLY -> {
+                        Text(
+                            tr("Ultime 5 settimane", "Last 5 weeks"),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        )
+                        PeriodBarChart(weeksTotalsSeries(history), 0L)
+                    }
+
+                    ChartMode.YEARLY -> TimeTravelChart(
+                        maxBack = 2,
+                        label = { b -> "${LocalDate.now().year - b}" },
+                    ) { b ->
+                        PeriodBarChart(yearSeries(history, b, totals = true), 0L)
+                    }
+                }
+            }
+        }
+
+        // ================================================ SEZIONE MEDIA
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(16.dp)) {
+                Text(tr("Media", "Average"), fontWeight = FontWeight.Bold)
+                Text(
+                    tr(
+                        "La media giornaliera nel periodo.",
+                        "Your daily average over the period.",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                var mode by remember { mutableStateOf(ChartMode.WEEKLY) }
+                ModeTabs(
+                    modes = listOf(
+                        ChartMode.WEEKLY to tr("Settimanale", "Weekly"),
+                        ChartMode.MONTHLY to tr("Mensile", "Monthly"),
+                        ChartMode.YEARLY to tr("Annuale", "Yearly"),
+                    ),
+                    selected = mode,
+                    onSelect = { mode = it },
+                )
+                Spacer(Modifier.height(12.dp))
+                when (mode) {
+                    ChartMode.WEEKLY -> {
+                        Text(
+                            tr("Media per giorno · ultime 4 settimane", "Per-day avg · last 4 weeks"),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        )
+                        PeriodBarChart(dowAverage4wSeries(history), 0L)
+                    }
+
+                    ChartMode.MONTHLY -> {
+                        Text(
+                            tr("Media a settimana · ultime 5", "Weekly avg · last 5"),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        )
+                        PeriodBarChart(weeksSeries(history), 0L)
+                    }
+
+                    ChartMode.YEARLY -> TimeTravelChart(
+                        maxBack = 2,
+                        label = { b -> "${LocalDate.now().year - b}" },
+                    ) { b ->
+                        PeriodBarChart(yearSeries(history, b, totals = false), 0L)
+                    }
+
+                    ChartMode.DAILY -> Unit // la media giornaliera vive nel profilo
                 }
             }
         }
@@ -428,16 +780,20 @@ private fun NoDataYet() {
  * con il minutaggio di quell'ora (uno solo alla volta; ritocca per chiudere).
  */
 @Composable
-private fun HourLineChart(series: List<Pair<String, Long>>) {
+private fun HourLineChart(series: List<Pair<String, Long>>, cutAtNow: Boolean = true) {
     if (series.isEmpty()) return
     if (series.all { it.second <= 0L }) { NoDataYet(); return }
     val maxMs = series.maxOf { it.second }.coerceAtLeast(1L)
     val lineColor = MaterialTheme.colorScheme.primary
     val fillColor = lineColor.copy(alpha = 0.15f)
     val n = series.size
-    // La curva si ferma all'ORA CORRENTE: le ore future restano vuote (3),
-    // perché devono ancora succedere. L'asse resta pieno fino a 23.
-    val lastIdx = remember { java.time.LocalTime.now().hour }.coerceIn(0, n - 1)
+    // OGGI la curva si ferma all'ora corrente (il futuro è vuoto); per i
+    // giorni PASSATI si vede l'intera giornata fino alle 23.
+    val lastIdx = if (cutAtNow) {
+        remember { java.time.LocalTime.now().hour }.coerceIn(0, n - 1)
+    } else {
+        n - 1
+    }
     val chartH = 150.dp
     var selected by remember { mutableStateOf<Int?>(null) }
     Column {

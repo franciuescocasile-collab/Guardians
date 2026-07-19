@@ -254,6 +254,21 @@ enum class TimerType(
         0xFF26A69A,
         tracksRejections = false,
     ),
+
+    /**
+     * Torre di pietra merlata: NON guarda il tempo ma il GIORNO della settimana.
+     * Le app sorvegliate sono del tutto sigillate nei giorni scelti (es. dal
+     * lunedì al venerdì) e libere negli altri. Vedi [GuardianTimer.blockedDays].
+     */
+    CASTELLANO(
+        "Il Castellano", "The Castellan",
+        "Castellano", "Castellan",
+        "Sigilla del tutto le app in certi giorni della settimana",
+        "Fully seals the apps on certain days of the week",
+        "Es. Castellano feriale", "E.g. Weekday Castellan",
+        0xFF607D8B,
+        tracksRejections = true,
+    ),
     ;
 
     val displayName: String get() = tr(nameIt, nameEn)
@@ -277,6 +292,11 @@ data class GuardianTimer(
     /** Fascia oraria del Custode, in minuti dalla mezzanotte (es. 1320 = 22:00). */
     val startMinuteOfDay: Int = 0,
     val endMinuteOfDay: Int = 0,
+    /**
+     * Castellano: i giorni in cui le app sono SIGILLATE (1 = lunedì … 7 =
+     * domenica, come java.time.DayOfWeek.value). Vuoto = nessun blocco.
+     */
+    val blockedDays: Set<Int> = emptySet(),
     /** Aperture giornaliere consentite dal Gendarme (0 = nessun limite giornaliero). */
     val maxOpensPerDay: Int = 0,
     /** Gendarme: minuti di attesa prima di poter riaprire l'app (0 = nessuno). */

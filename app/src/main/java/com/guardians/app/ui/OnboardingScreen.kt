@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,7 +78,21 @@ fun OnboardingScreen(onDone: () -> Unit) {
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Spacer(Modifier.height(8.dp))
+        // Scelta lingua nell'angolo in alto a destra: un solo pulsante che
+        // mostra l'ALTRA lingua (quella verso cui passi). Niente descrizioni.
+        val isEnglish by com.guardians.app.data.SettingsRepository.english.collectAsState()
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(
+                onClick = {
+                    com.guardians.app.data.SettingsRepository.setEnglish(context, !isEnglish)
+                },
+            ) {
+                Text(
+                    if (isEnglish) "Italiano" else "English",
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
         Text(
             tr("Benvenuto in Guardians", "Welcome to Guardians"),
             style = MaterialTheme.typography.headlineLarge,

@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
@@ -364,34 +365,42 @@ fun HubScreen(
             }
         }
 
-        // Stato del TRASCINAMENTO condiviso: mentre sposti una card, le ALTRE
-        // scivolano per farle spazio (1) — lo shift si calcola qui e ogni riga
-        // lo anima per conto suo.
+        // Stato del TRASCINAMENTO condiviso. Usa le POSIZIONI REALI di ogni
+        // riga (misurate), non un passo fisso: così puoi trascinare una card
+        // dove vuoi anche se le card hanno altezze diverse (home 1). Mentre
+        // sposti, le altre scivolano per farle spazio (1).
         var draggingKey by remember { mutableStateOf<String?>(null) }
         var dragY by remember { mutableStateOf(0f) }
-        var dragRowH by remember { mutableStateOf(0f) }
-        val spacingPx = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
-        val dragStep = (if (dragRowH > 0f) dragRowH else 260f) + spacingPx
-        val dragIdx = draggingKey?.let { cardOrder.indexOf(it) } ?: -1
-        val stepsMoved = if (dragIdx >= 0) {
-            (dragY / dragStep).roundToInt()
-                .coerceIn(-dragIdx, cardOrder.size - 1 - dragIdx)
-        } else {
-            0
-        }
-        val targetIdx = dragIdx + stepsMoved
+        val rowTop = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
+        val rowHt = remember { androidx.compose.runtime.mutableStateMapOf<String, Float>() }
 
-        cardOrder.forEachIndexed { cardIndex, cardKey ->
+        // In modifica ci sono TUTTE le card (anche le spente, grigie); fuori
+        // solo quelle attive (7).
+        val visible = if (homeEdit) cardOrder else cardOrder.filter { it !in hiddenCards }
+        val originalIdx = draggingKey?.let { visible.indexOf(it) } ?: -1
+        val draggedH = draggingKey?.let { rowHt[it] } ?: 0f
+        fun centerOf(k: String): Float = (rowTop[k] ?: 0f) + (rowHt[k] ?: 0f) / 2f
+        val draggedCenter = if (originalIdx >= 0) {
+            (rowTop[draggingKey] ?: 0f) + draggedH / 2f + dragY
+        } else {
+            0f
+        }
+        // L'indice di arrivo = quante ALTRE righe hanno il centro sopra il
+        // centro della card trascinata.
+        val targetIdx = if (originalIdx >= 0) {
+            visible.count { it != draggingKey && centerOf(it) < draggedCenter }
+        } else {
+            -1
+        }
+        val stepsMoved = if (originalIdx >= 0) targetIdx - originalIdx else 0
+
+        visible.forEachIndexed { cardIndex, cardKey ->
             val isOff = cardKey in hiddenCards
-            // Fuori dalla modifica, le card disattivate non si vedono;
-            // in modifica ci sono TUTTE (le spente restano lì, grigie, con lo
-            // switch, così le puoi riaccendere) — 7.
-            if (!homeEdit && isOff) return@forEachIndexed
             // Quanto deve scostarsi QUESTA riga per fare spazio alla trascinata.
             val shiftTarget = when {
                 draggingKey == null || cardKey == draggingKey -> 0f
-                cardIndex in (dragIdx + 1)..targetIdx -> -dragStep
-                cardIndex in targetIdx until dragIdx -> dragStep
+                cardIndex in (originalIdx + 1)..targetIdx -> -draggedH
+                cardIndex in targetIdx until originalIdx -> draggedH
                 else -> 0f
             }
             HomeEditableRow(
@@ -402,9 +411,9 @@ fun HubScreen(
                 isDragging = cardKey == draggingKey,
                 dragOffset = if (cardKey == draggingKey) dragY else 0f,
                 shiftTarget = shiftTarget,
-                onDragStart = { h ->
+                onMeasured = { top, h -> rowTop[cardKey] = top; rowHt[cardKey] = h },
+                onDragStart = {
                     draggingKey = cardKey
-                    dragRowH = h
                     dragY = 0f
                 },
                 onDragDelta = { dy -> dragY += dy },
@@ -564,7 +573,8 @@ private fun HomeEditableRow(
     isDragging: Boolean,
     dragOffset: Float,
     shiftTarget: Float,
-    onDragStart: (Float) -> Unit,
+    onMeasured: (top: Float, height: Float) -> Unit,
+    onDragStart: () -> Unit,
     onDragDelta: (Float) -> Unit,
     onDragEnd: () -> Unit,
     onToggleActive: (Boolean) -> Unit,
@@ -575,56 +585,68 @@ private fun HomeEditableRow(
         return
     }
     // La card trascinata SEGUE il dito; le ALTRE scivolano dolcemente per
-    // farle spazio (shiftTarget animato) — 1.
-    var rowH by remember(cardKey) { mutableStateOf(0f) }
+    // farle spazio (shiftTarget animato) — 1. Il Box ESTERNO occupa lo slot
+    // di layout e NON si muove: da lì misuriamo la posizione REALE (stabile
+    // durante il drag). L'offset visivo è applicato al contenuto INTERNO.
     val shift by androidx.compose.animation.core.animateFloatAsState(
         targetValue = shiftTarget,
         animationSpec = androidx.compose.animation.core.tween(180),
         label = "rowShift",
     )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .onGloballyPositioned { rowH = it.size.height.toFloat() }
-            .offset {
-                IntOffset(0, (if (isDragging) dragOffset else shift).roundToInt())
-            }
-            .zIndex(if (isDragging) 1f else 0f),
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned {
+                onMeasured(
+                    it.positionInParent().y,
+                    it.size.height.toFloat(),
+                )
+            },
     ) {
-        Icon(
-            Icons.Default.DragHandle,
-            contentDescription = tr("Trascina per spostare", "Drag to move"),
-            tint = if (isDragging) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .size(34.dp)
-                .pointerInput(cardKey) {
-                    detectVerticalDragGestures(
-                        onDragStart = { onDragStart(rowH) },
-                        onDragEnd = { onDragEnd() },
-                        onDragCancel = { onDragEnd() },
-                    ) { change, dy ->
-                        change.consume()
-                        onDragDelta(dy)
-                    }
-                },
-        )
-        Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier
-                .weight(1f)
-                .alpha(if (active) 1f else 0.4f),
+                .fillMaxWidth()
+                .offset {
+                    IntOffset(0, (if (isDragging) dragOffset else shift).roundToInt())
+                }
+                .zIndex(if (isDragging) 1f else 0f),
         ) {
-            androidx.compose.runtime.CompositionLocalProvider(
-                LocalHomeEditMode provides true,
-            ) { content() }
-        }
-        if (hideable) {
+            Icon(
+                Icons.Default.DragHandle,
+                contentDescription = tr("Trascina per spostare", "Drag to move"),
+                tint = if (isDragging) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(34.dp)
+                    .pointerInput(cardKey) {
+                        detectVerticalDragGestures(
+                            onDragStart = { onDragStart() },
+                            onDragEnd = { onDragEnd() },
+                            onDragCancel = { onDragEnd() },
+                        ) { change, dy ->
+                            change.consume()
+                            onDragDelta(dy)
+                        }
+                    },
+            )
             Spacer(Modifier.width(8.dp))
-            Switch(checked = active, onCheckedChange = { onToggleActive(it) })
-        } else {
-            // Le essenziali non si spengono: spazio per allineare le righe.
-            Spacer(Modifier.width(52.dp))
+            Box(
+                Modifier
+                    .weight(1f)
+                    .alpha(if (active) 1f else 0.4f),
+            ) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    LocalHomeEditMode provides true,
+                ) { content() }
+            }
+            if (hideable) {
+                Spacer(Modifier.width(8.dp))
+                Switch(checked = active, onCheckedChange = { onToggleActive(it) })
+            } else {
+                // Le essenziali non si spengono: spazio per allineare le righe.
+                Spacer(Modifier.width(52.dp))
+            }
         }
     }
 }

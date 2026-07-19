@@ -44,6 +44,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.Locale
 
 /**
  * Servizio in foreground che ogni secondo controlla quale app è in primo piano
@@ -69,6 +70,10 @@ class MonitorService : Service() {
         private const val TRIGGER_THROTTLE_MS = 5_000L
         // Sotto questa pausa, tornare sull'app NON conta come nuova apertura.
         private const val OPEN_GAP_MS = 20_000L
+        // SENTINELLA (3): "uso continuo" con grazia di 30 secondi. Se lasci
+        // l'app per più di 30s il conteggio riparte da zero — tornare dopo
+        // un'ora non deve trovare memorizzato il minuto di un'ora fa.
+        private const val SENTINELLA_GRACE_MS = 30_000L
         // La posizione (Vedetta) si aggiorna al massimo ogni 45 secondi, per la batteria.
         private const val LOCATION_EVERY_MS = 45_000L
         // Araldo: uno spegnimento schermo di almeno 4 ore consecutive = una dormita.
@@ -406,11 +411,16 @@ class MonitorService : Service() {
                     }
 
                     TimerType.SENTINELLA -> if (isTarget) {
+                        // Rientro dopo più di 30s = conteggio azzerato (3).
+                        val seen = lastSeenMs[timer.id] ?: 0L
+                        if (seen != 0L && now - seen >= SENTINELLA_GRACE_MS) {
+                            continuousMs[timer.id] = 0L
+                        }
                         continuousMs[timer.id] = (continuousMs[timer.id] ?: 0L) + elapsed
                         lastSeenMs[timer.id] = now
                     } else {
                         val seen = lastSeenMs[timer.id] ?: 0L
-                        if (seen != 0L && now - seen >= timer.resetMs) {
+                        if (seen != 0L && now - seen >= SENTINELLA_GRACE_MS) {
                             continuousMs[timer.id] = 0L
                             lastSeenMs.remove(timer.id)
                         }
@@ -485,6 +495,13 @@ class MonitorService : Service() {
                             if (cooldownEnd != 0L) {
                                 cooldownUntil.remove(timer.id)
                             }
+                            // Rientro dopo più di 30s = il conteggio continuo
+                            // riparte da zero, così pause vere non si sommano (3).
+                            val seen = lastSeenMs[timer.id] ?: 0L
+                            if (seen != 0L && now - seen >= SENTINELLA_GRACE_MS) {
+                                continuousMs[timer.id] = 0L
+                                warned.removeAll { it == timer.id || it.startsWith("${timer.id}:") }
+                            }
                             val used = (continuousMs[timer.id] ?: 0L) + elapsed
                             continuousMs[timer.id] = used
                             lastSeenMs[timer.id] = now
@@ -502,7 +519,7 @@ class MonitorService : Service() {
                         }
                     } else {
                         val seen = lastSeenMs[timer.id] ?: 0L
-                        if (seen != 0L && now - seen >= timer.resetMs) {
+                        if (seen != 0L && now - seen >= SENTINELLA_GRACE_MS) {
                             continuousMs[timer.id] = 0L
                             lastSeenMs.remove(timer.id)
                             warned.removeAll { it == timer.id || it.startsWith("${timer.id}:") }
@@ -696,6 +713,16 @@ class MonitorService : Service() {
                     }
                 }
 
+                // Castellano: nei giorni scelti le app sono del tutto sigillate.
+                TimerType.CASTELLANO -> {
+                    if (isTarget) {
+                        val today = java.time.LocalDate.now().dayOfWeek.value // 1=lun..7=dom
+                        if (today in timer.blockedDays) {
+                            trigger(timer, foreground!!)
+                        }
+                    }
+                }
+
                 // L'innerType di una Vedetta non è mai a sua volta una Vedetta.
                 TimerType.VEDETTA -> Unit
             }
@@ -822,6 +849,19 @@ class MonitorService : Service() {
                 "You are in the area watched by ${timer.name}: $appLabel cannot " +
                     "be used here right now.",
             )
+
+            timer.type == TimerType.CASTELLANO -> {
+                val dayName = java.time.LocalDate.now().dayOfWeek.getDisplayName(
+                    java.time.format.TextStyle.FULL,
+                    if (SettingsRepository.english.value) Locale.ENGLISH else Locale.ITALIAN,
+                )
+                tr(
+                    "Oggi è $dayName: ${timer.name} tiene $appLabel sotto sigillo. " +
+                        "Si riaprirà nei giorni liberi.",
+                    "Today is $dayName: ${timer.name} keeps $appLabel sealed. " +
+                        "It reopens on the free days.",
+                )
+            }
 
             timer.type == TimerType.ARALDO -> {
                 val wakeAt = AraldoData.wakeAt.value

@@ -215,37 +215,15 @@ fun StatsScreen(onBack: () -> Unit) {
                             )
                             Spacer(Modifier.height(12.dp))
                             val histAvg = UsageHistoryRepository.dailyAverageMs()
-                            val goalMs = com.guardians.app.data.ProfileRepository
-                                .dailyGoalMinutes.collectAsState().value * 60_000L
-                            // Obiettivo NASCOSTO di default: si accende con un
-                            // pulsantino discreto sotto il grafico (2.6).
-                            var showGoal by remember { mutableStateOf(false) }
+                            // L'obiettivo è stato TOLTO da questo grafico (stat 2):
+                            // resta nel Calendario dell'obiettivo (Dettaglio).
                             WeekChart2(
                                 days = u.last7Days,
                                 history = UsageHistoryRepository.history.value,
                                 histAvg = histAvg,
-                                goalMs = if (showGoal) goalMs else 0L,
                             )
-                            // Il pulsantino dell'obiettivo: piccolo, non invasivo.
-                            if (goalMs > 0L) {
-                                TextButton(
-                                    onClick = { showGoal = !showGoal },
-                                    contentPadding = androidx.compose.foundation.layout
-                                        .PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                ) {
-                                    Text(
-                                        if (showGoal) {
-                                            tr("Nascondi obiettivo", "Hide goal")
-                                        } else {
-                                            tr("Mostra obiettivo", "Show goal")
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                            // (2.6.2) Niente più "media storica / questa settimana"
-                            // qui sotto: il grafico parla da solo.
+                            // (2.6.2) Niente "media storica / questa settimana" qui
+                            // sotto: il grafico parla da solo.
                         }
                     }
                 }
@@ -948,7 +926,6 @@ private fun WeekChart2(
     days: List<Pair<String, Long>>,
     history: Map<String, Long>,
     histAvg: Long,
-    goalMs: Long,
 ) {
     if (days.isEmpty()) return
     // Media per GIORNO DELLA SETTIMANA, allineata alle 7 colonne mostrate
@@ -966,14 +943,16 @@ private fun WeekChart2(
         }
     }
     val maxMs = maxOf(
-        days.maxOf { it.second }, dowAvg.max(), histAvg, goalMs, 1L,
+        days.maxOf { it.second }, dowAvg.max(), histAvg, 1L,
     )
     val barColor = MaterialTheme.colorScheme.primary
     // Solo grigi per le guide (16.2.4): toni medi leggibili su scuro e chiaro.
-    val dowColor = Color(0xFF8E8E8E)          // media del giorno (linea + tratteggio)
+    val dowColor = Color(0xFF8E8E8E)          // media relativa al giorno (linea + tratteggio)
     val avgColor = Color(0xFF9E9E9E)          // media generale (tratteggiata)
-    val goalColor = Color(0xFFB5B5B5)         // obiettivo (continua)
     val chartH = 150.dp
+    // Spazio a SINISTRA per le etichette orarie, così NON coprono le barre
+    // (stat 1: "non si vedono bene le ore laterali, fai spazio").
+    val leftPadDp = 30.dp
 
     Column {
         Box(
@@ -982,10 +961,13 @@ private fun WeekChart2(
                 .height(chartH),
         ) {
             // DIETRO: bande di colonna alternate + righe orarie di riferimento
-            // (2.6.1) + la media del giorno della settimana col tratteggio.
+            // (2.6.1) + la media relativa al giorno col tratteggio.
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                 val n = days.size
-                val colW = size.width / n
+                val leftPad = leftPadDp.toPx()
+                val plotW = size.width - leftPad
+                val colW = plotW / n
+                fun colX(i: Int): Float = leftPad + colW * i
                 fun y(v: Long): Float =
                     size.height * (1f - (v.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f))
 
@@ -993,21 +975,20 @@ private fun WeekChart2(
                 for (i in 0 until n step 2) {
                     drawRect(
                         color = dowColor.copy(alpha = 0.06f),
-                        topLeft = androidx.compose.ui.geometry.Offset(colW * i, 0f),
+                        topLeft = androidx.compose.ui.geometry.Offset(colX(i), 0f),
                         size = androidx.compose.ui.geometry.Size(colW, size.height),
                     )
                 }
 
-                // Righe orarie (2h, 4h…) con l'etichetta a sinistra: un metro
-                // per capire quanto sono alte le barre.
+                // Righe orarie (2h, 4h…) con l'etichetta nella corsia a sinistra.
                 val stepH = when {
                     maxMs <= 4L * 3_600_000L -> 1L
                     maxMs <= 9L * 3_600_000L -> 2L
                     else -> 4L
                 }
                 val labelPaint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(150, 150, 150, 150)
-                    textSize = 9.dp.toPx()
+                    color = android.graphics.Color.argb(170, 150, 150, 150)
+                    textSize = 10.dp.toPx()
                     isAntiAlias = true
                 }
                 var hLine = stepH
@@ -1015,18 +996,18 @@ private fun WeekChart2(
                     val yy = y(hLine * 3_600_000L)
                     drawLine(
                         color = dowColor.copy(alpha = 0.18f),
-                        start = androidx.compose.ui.geometry.Offset(0f, yy),
+                        start = androidx.compose.ui.geometry.Offset(leftPad, yy),
                         end = androidx.compose.ui.geometry.Offset(size.width, yy),
                         strokeWidth = 1.5f,
                     )
                     drawContext.canvas.nativeCanvas.drawText(
-                        "${hLine}h", 4.dp.toPx(), yy - 3.dp.toPx(), labelPaint,
+                        "${hLine}h", 2.dp.toPx(), yy - 3.dp.toPx(), labelPaint,
                     )
                     hLine += stepH
                 }
 
                 val pts = List(n) {
-                    androidx.compose.ui.geometry.Offset(colW * it + colW / 2f, y(dowAvg[it]))
+                    androidx.compose.ui.geometry.Offset(colX(it) + colW / 2f, y(dowAvg[it]))
                 }
                 // Area sotto la linea riempita di TRATTEGGIO diagonale.
                 val area = androidx.compose.ui.graphics.Path().apply {
@@ -1048,16 +1029,16 @@ private fun WeekChart2(
                         x += 22f
                     }
                 }
-                // La linea spezzata della media del giorno.
+                // La linea spezzata della media relativa al giorno.
                 for (i in 0 until n - 1) {
                     drawLine(dowColor, pts[i], pts[i + 1], strokeWidth = 3.5f)
                 }
                 pts.forEach { drawCircle(dowColor, radius = 4.5f, center = it) }
             }
-            // Le BARRE colorate, sopra il tratteggio.
+            // Le BARRE colorate, sopra il tratteggio (allineate all'area barre).
             Row(
                 verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(start = leftPadDp),
             ) {
                 days.forEach { (_, ms) ->
                     Box(
@@ -1079,33 +1060,27 @@ private fun WeekChart2(
                     }
                 }
             }
-            // SOPRA: media generale (tratteggiata) e obiettivo (continua).
+            // SOPRA: solo la media generale (tratteggiata). L'obiettivo è stato
+            // TOLTO da questo grafico (stat 2): confondeva ed era coperto.
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val leftPad = leftPadDp.toPx()
                 fun y(v: Long): Float =
                     size.height * (1f - (v.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f))
                 if (histAvg > 0L) {
                     drawLine(
                         color = avgColor,
-                        start = androidx.compose.ui.geometry.Offset(0f, y(histAvg)),
+                        start = androidx.compose.ui.geometry.Offset(leftPad, y(histAvg)),
                         end = androidx.compose.ui.geometry.Offset(size.width, y(histAvg)),
                         strokeWidth = 3f,
                         pathEffect = androidx.compose.ui.graphics.PathEffect
                             .dashPathEffect(floatArrayOf(14f, 12f)),
                     )
                 }
-                if (goalMs > 0L) {
-                    drawLine(
-                        color = goalColor,
-                        start = androidx.compose.ui.geometry.Offset(0f, y(goalMs)),
-                        end = androidx.compose.ui.geometry.Offset(size.width, y(goalMs)),
-                        strokeWidth = 4f,
-                    )
-                }
             }
         }
         Spacer(Modifier.height(4.dp))
-        // Etichette dei giorni, una per colonna.
-        Row(Modifier.fillMaxWidth()) {
+        // Etichette dei giorni, una per colonna (allineate all'area barre).
+        Row(Modifier.fillMaxWidth().padding(start = leftPadDp)) {
             days.forEach { (label, _) ->
                 Text(
                     label,
@@ -1118,18 +1093,16 @@ private fun WeekChart2(
             }
         }
         Spacer(Modifier.height(8.dp))
-        // Legenda delle tre guide (piccola, in grigio).
+        // Legenda delle due guide (piccola, in grigio). Nome più chiaro:
+        // "Media relativa al giorno" invece di "Media del giorno" (stat 2).
         Row(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (goalMs > 0L) {
-                LegendLine(goalColor, dashed = false, label = tr("Obiettivo", "Goal"))
-            }
             LegendLine(avgColor, dashed = true, label = tr("Media generale", "Overall avg"))
             LegendLine(
                 dowColor, dashed = false, hatched = true,
-                label = tr("Media del giorno", "Day-of-week avg"),
+                label = tr("Media relativa al giorno", "Per-weekday avg"),
             )
         }
     }

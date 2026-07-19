@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -323,15 +325,23 @@ fun UserProfileScreen(
             }
         }
         val avgMs = UsageHistoryRepository.dailyAverageMs()
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+        // I due riquadri hanno la STESSA altezza (profilo 1): IntrinsicSize.Max
+        // sul Row + fillMaxHeight su entrambe le card.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(androidx.compose.foundation.layout.IntrinsicSize.Max),
+        ) {
             // La stessa fiamma animata della home, ma grande (5).
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             ) {
                 Column(
-                    Modifier.padding(16.dp).fillMaxWidth(),
+                    Modifier.padding(16.dp).fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                 ) {
                     StreakFlame(streak, Modifier.size(56.dp))
                     Text(
@@ -351,7 +361,7 @@ fun UserProfileScreen(
                     "Media d'uso giornaliera storica",
                     "Historical daily usage average",
                 ),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
         }
 
@@ -479,6 +489,38 @@ fun UserProfileScreen(
 
         // L'Araldo e il sonno ora vivono nella pagina SONNO (card in home).
 
+        // -------------------------------------------------- i traguardi (spille)
+        com.guardians.app.data.BadgesRepository.load(context)
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.guardians.app.data.BadgesRepository.evaluate(context)
+            }
+        }
+        val unlockedBadges by com.guardians.app.data.BadgesRepository
+            .unlocked.collectAsState()
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(16.dp)) {
+                val total = com.guardians.app.data.Badge.entries.size
+                Text(
+                    tr("Traguardi", "Achievements") +
+                        "  ${unlockedBadges.size}/$total",
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr(
+                        "Spille che sblocchi con certe imprese. Alcune sono " +
+                            "segrete: ne vedi lo stemma, ma non la missione.",
+                        "Pins you unlock with certain feats. Some are secret: you " +
+                            "see the crest, but not the mission.",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                BadgeGrid(unlocked = unlockedBadges)
+            }
+        }
+
         // ------------------------------------------- collegamento al perché
         Card(
             onClick = onOpenWhy,
@@ -533,8 +575,9 @@ private fun MetricTile(big: String, label: String, modifier: Modifier = Modifier
         modifier = modifier,
     ) {
         Column(
-            Modifier.padding(16.dp).fillMaxWidth(),
+            Modifier.padding(16.dp).fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 big,
@@ -549,6 +592,120 @@ private fun MetricTile(big: String, label: String, modifier: Modifier = Modifier
                 textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+/**
+ * La griglia dei traguardi: ogni spilla è una medaglia colorata con l'emblema.
+ * Toccandola compare il dettaglio (titolo + missione, o "segreto" se nascosto
+ * e non ancora sbloccato). I nascosti mostrano lo stemma ma non la missione.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun BadgeGrid(unlocked: Set<String>) {
+    var detail by remember { mutableStateOf<com.guardians.app.data.Badge?>(null) }
+    detail?.let { b ->
+        val isOn = b.name in unlocked
+        val secret = b.hidden && !isOn
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { detail = null },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { detail = null }) {
+                    Text(tr("Chiudi", "Close"))
+                }
+            },
+            icon = { BadgePin(b, unlocked = isOn, size = 64.dp) },
+            title = {
+                Text(
+                    if (secret) tr("Traguardo segreto", "Secret achievement") else b.title,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            text = {
+                Text(
+                    if (secret) {
+                        tr(
+                            "Continua così per scoprirlo: la missione si svela solo " +
+                                "quando lo conquisti.",
+                            "Keep going to discover it: the mission is revealed only " +
+                                "when you earn it.",
+                        )
+                    } else {
+                        b.desc + if (isOn) tr("\n\n✓ Conquistato!", "\n\n✓ Earned!") else ""
+                    },
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+        )
+    }
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        com.guardians.app.data.Badge.entries.forEach { badge ->
+            Box(
+                Modifier.clickable(
+                    interactionSource = remember {
+                        androidx.compose.foundation.interaction.MutableInteractionSource()
+                    },
+                    indication = null,
+                ) { detail = badge },
+            ) {
+                BadgePin(badge, unlocked = badge.name in unlocked, size = 60.dp)
+            }
+        }
+    }
+}
+
+/**
+ * Una singola spilla: medaglia rotonda con gradiente e emblema. Spenta = grigia
+ * (traguardo non ancora conquistato). Se nascosta e spenta, l'emblema è un "?".
+ */
+@Composable
+private fun BadgePin(
+    badge: com.guardians.app.data.Badge,
+    unlocked: Boolean,
+    size: androidx.compose.ui.unit.Dp,
+) {
+    val secret = badge.hidden && !unlocked
+    val c1 = if (unlocked) androidx.compose.ui.graphics.Color(badge.color1)
+    else androidx.compose.ui.graphics.Color(0xFF9E9E9E)
+    val c2 = if (unlocked) androidx.compose.ui.graphics.Color(badge.color2)
+    else androidx.compose.ui.graphics.Color(0xFF616161)
+    Box(
+        Modifier.size(size),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val r = this.size.minDimension / 2f
+            val center = androidx.compose.ui.geometry.Offset(this.size.width / 2f, this.size.height / 2f)
+            // Bordo esterno chiaro (contorno della spilla).
+            drawCircle(
+                color = androidx.compose.ui.graphics.Color.White.copy(alpha = if (unlocked) 0.85f else 0.25f),
+                radius = r,
+                center = center,
+            )
+            // Disco con gradiente diagonale.
+            drawCircle(
+                brush = androidx.compose.ui.graphics.Brush.linearGradient(listOf(c1, c2)),
+                radius = r * 0.86f,
+                center = center,
+            )
+        }
+        Text(
+            if (secret) "?" else badge.emoji,
+            fontSize = androidx.compose.ui.unit.TextUnit(
+                size.value * 0.42f,
+                androidx.compose.ui.unit.TextUnitType.Sp,
+            ),
+            color = androidx.compose.ui.graphics.Color.White,
+            fontWeight = FontWeight.Bold,
+            // L'emoji resta pieno; se spento (non segreto) lo attenuiamo un po'.
+            modifier = Modifier.alpha(if (unlocked || secret) 1f else 0.85f),
+        )
     }
 }
 

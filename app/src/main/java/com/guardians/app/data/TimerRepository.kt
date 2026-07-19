@@ -70,6 +70,7 @@ object TimerRepository {
                 put("resetUnit", t.resetUnit.name)
                 put("startMinuteOfDay", t.startMinuteOfDay)
                 put("endMinuteOfDay", t.endMinuteOfDay)
+                put("blockedDays", org.json.JSONArray(t.blockedDays.toList()))
                 put("maxOpensPerDay", t.maxOpensPerDay)
                 put("reopenCooldownMinutes", t.reopenCooldownMinutes)
                 put("notifyAfterOpens", t.notifyAfterOpens)
@@ -117,6 +118,9 @@ object TimerRepository {
                 resetUnit = TimeUnit.valueOf(o.optString("resetUnit", TimeUnit.MINUTES.name)),
                 startMinuteOfDay = o.optInt("startMinuteOfDay", 0),
                 endMinuteOfDay = o.optInt("endMinuteOfDay", 0),
+                blockedDays = o.optJSONArray("blockedDays")?.let { arr ->
+                    (0 until arr.length()).map { arr.getInt(it) }.toSet()
+                } ?: emptySet(),
                 maxOpensPerDay = o.optInt("maxOpensPerDay", 0),
                 reopenCooldownMinutes = o.optInt("reopenCooldownMinutes", 0),
                 notifyAfterOpens = o.optInt("notifyAfterOpens", 0),

@@ -132,6 +132,8 @@ data class TimerDraft(
     /** Orari del Custode in minuti dalla mezzanotte; null = non ancora scelti. */
     val startTime: Int?,
     val endTime: Int?,
+    /** Castellano: giorni in cui sigillare le app (1=lun … 7=dom). */
+    val blockedDays: Set<Int> = emptySet(),
     /** Gendarme: aperture giornaliere, cooldown di riapertura, notifica dopo N aperture. */
     val opensValue: String,
     val reopenCooldownValue: String,
@@ -177,6 +179,7 @@ data class TimerDraft(
             resetUnit = TimeUnit.MINUTES,
             startTime = null,
             endTime = null,
+            blockedDays = emptySet(),
             opensValue = "",
             reopenCooldownValue = "",
             notifyAfterOpensValue = "",
@@ -217,6 +220,7 @@ data class TimerDraft(
                 timer.effectiveType == TimerType.CUSTODE ||
                 timer.effectiveType == TimerType.ARALDO
             ) timer.endMinuteOfDay else null,
+            blockedDays = timer.blockedDays,
             opensValue = if (timer.maxOpensPerDay > 0) timer.maxOpensPerDay.toString() else "",
             reopenCooldownValue =
                 if (timer.reopenCooldownMinutes > 0) timer.reopenCooldownMinutes.toString() else "",
@@ -374,6 +378,12 @@ data class TimerDraft(
                 )
             }
 
+            TimerType.CASTELLANO -> {
+                // Servono i giorni in cui sigillare le app: senza, niente timer.
+                if (blockedDays.isEmpty()) return null
+                base.copy(blockedDays = blockedDays)
+            }
+
             // configType non è mai VEDETTA (il potere interno non è una Vedetta).
             TimerType.VEDETTA -> null
         }
@@ -393,6 +403,9 @@ private fun GuardiansNav() {
     }
 
     var draft by remember { mutableStateOf<TimerDraft?>(null) }
+    // Scroll dell'editor tenuto QUI (non dentro EditScreen): così scegliendo le
+    // app e tornando indietro si resta dov'eri, non in cima (5).
+    val editScroll = androidx.compose.foundation.rememberScrollState()
     var selectedTeam by remember { mutableStateOf<String?>(null) }
 
     // PILA di navigazione: ogni schermata aperta viene impilata, e "indietro"
@@ -575,6 +588,7 @@ private fun GuardiansNav() {
                 // sempre alla schermata da cui l'editor è stato aperto.
                 EditScreen(
                     draft = current,
+                    scrollState = editScroll,
                     onDraftChange = { draft = it },
                     onPickApps = { navigate(Screen.PICKER) },
                     onBack = { goBack() },

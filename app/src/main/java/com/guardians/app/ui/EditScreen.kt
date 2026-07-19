@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,13 +82,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun EditScreen(
     draft: TimerDraft,
+    scrollState: androidx.compose.foundation.ScrollState? = null,
     onDraftChange: (TimerDraft) -> Unit,
     onPickApps: () -> Unit,
     onBack: () -> Unit,
     onSave: (GuardianTimer) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    val scroll = rememberScrollState()
+    // Scroll passato dall'esterno (per restare dov'eri tornando dal selettore
+    // app, 5); se assente, uno locale.
+    val scroll = scrollState ?: rememberScrollState()
     // Quando scegli il TIPO, la pagina scende da sola alla personalizzazione
     // (4): niente più cercare a mano le opzioni sotto la lista dei tipi.
     var configY by remember { mutableStateOf(0) }
@@ -139,6 +143,18 @@ fun EditScreen(
                 )
             }
         }
+
+        // Barra divisoria (4): separa la SCELTA del tipo dalla zona di
+        // PERSONALIZZAZIONE qui sotto.
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        Text(
+            tr("Personalizzazione", "Customization"),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
 
         OutlinedTextField(
             value = draft.name,
@@ -585,15 +601,46 @@ fun EditScreen(
                 }
             }
 
+            TimerType.CASTELLANO -> {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        tr("Giorni sigillati", "Sealed days"),
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        tr(
+                            "Scegli i giorni in cui le app sorvegliate sono del tutto " +
+                                "chiuse. Negli altri giorni si aprono normalmente. " +
+                                "Esempio: seleziona da lunedì a venerdì per lasciarle " +
+                                "libere solo nel weekend.",
+                            "Pick the days when the watched apps are fully closed. On " +
+                                "the other days they open normally. Example: select " +
+                                "Monday to Friday to leave them free only on weekends.",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    WeekDaySelector(
+                        selected = draft.blockedDays,
+                        onToggle = { day ->
+                            val next = draft.blockedDays.toMutableSet()
+                            if (day in next) next.remove(day) else next.add(day)
+                            onDraftChange(draft.copy(blockedDays = next))
+                        },
+                    )
+                }
+            }
+
             // L'innerType di una Vedetta non è mai a sua volta una Vedetta.
             TimerType.VEDETTA -> Unit
         }
 
         // Notifica di preavviso prima del blocco: non serve al Gendarme, al
-        // Messaggero (È già fatto di avvisi), all'Esattore (non blocca) né
-        // all'Araldo (al mattino stai ancora dormendo).
+        // Messaggero (È già fatto di avvisi), all'Esattore (non blocca), né
+        // all'Araldo/Castellano (bloccano per fasce/giorni interi).
         if (configType != TimerType.GENDARME && configType != TimerType.MESSAGGERO &&
-            configType != TimerType.ESATTORE && configType != TimerType.ARALDO
+            configType != TimerType.ESATTORE && configType != TimerType.ARALDO &&
+            configType != TimerType.CASTELLANO
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(
@@ -871,6 +918,10 @@ fun EditScreen(
                                 "attiva almeno una fase e imposta la sua durata",
                                 "enable at least one phase and set its duration",
                             )
+                            TimerType.CASTELLANO -> tr(
+                                "scegli almeno un giorno da sigillare",
+                                "pick at least one day to seal",
+                            )
                             else -> tr("imposta i tempi", "set the times")
                         }
                     )
@@ -898,6 +949,53 @@ fun EditScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(tr("Elimina timer", "Delete timer"))
+            }
+        }
+    }
+}
+
+/**
+ * I 7 giorni della settimana come pillole selezionabili (Castellano): 1 = lun …
+ * 7 = dom, nell'ordine del primo giorno scelto nelle impostazioni.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun WeekDaySelector(selected: Set<Int>, onToggle: (Int) -> Unit) {
+    val locale = if (com.guardians.app.data.SettingsRepository.english.value) {
+        java.util.Locale.ENGLISH
+    } else {
+        java.util.Locale.ITALIAN
+    }
+    val startMonday = com.guardians.app.data.SettingsRepository.weekStartMonday.value
+    // Ordine 1..7 (lun..dom) oppure con la domenica davanti.
+    val order = if (startMonday) (1..7).toList() else listOf(7, 1, 2, 3, 4, 5, 6)
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        order.forEach { day ->
+            val on = day in selected
+            val label = java.time.DayOfWeek.of(day)
+                .getDisplayName(java.time.format.TextStyle.SHORT, locale)
+                .replaceFirstChar { it.uppercase() }
+            Box(
+                Modifier
+                    .background(
+                        if (on) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(12.dp),
+                    )
+                    .clickable { onToggle(day) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    color = if (on) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

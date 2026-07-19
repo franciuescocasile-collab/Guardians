@@ -215,6 +215,7 @@ fun TimerShapeIcon(type: TimerType, modifier: Modifier = Modifier) {
                 drawPath(path, color)
             }
             TimerType.VEDETTA -> drawPath(starPath(w, h), color)
+            TimerType.CASTELLANO -> drawPath(castlePath(w, h), color)
             TimerType.ESATTORE -> drawPath(hexagonPath(w, h), color)
             TimerType.ARALDO -> {
                 drawArc(
@@ -242,6 +243,33 @@ private fun guardianDrawable(type: TimerType): Int? = when (type) {
     TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
     TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
     TimerType.MESSAGGERO -> com.guardians.app.R.drawable.guardian_messaggero
+    // Il Castellano non ha (ancora) un PNG: usa la torre merlata disegnata.
+    TimerType.CASTELLANO -> null
+}
+
+/** Torre merlata (con 3 merli in cima) inscritta nell'area [w]×[h] — il Castellano. */
+private fun castlePath(w: Float, h: Float): Path {
+    val left = w * 0.14f
+    val right = w * 0.86f
+    val bottom = h * 0.92f
+    val battTop = h * 0.10f      // cima dei merli
+    val battBottom = h * 0.34f   // fondo delle feritoie
+    val seg = (right - left) / 5f
+    return Path().apply {
+        moveTo(left, bottom)
+        lineTo(left, battTop)
+        lineTo(left + seg, battTop)
+        lineTo(left + seg, battBottom)
+        lineTo(left + 2 * seg, battBottom)
+        lineTo(left + 2 * seg, battTop)
+        lineTo(left + 3 * seg, battTop)
+        lineTo(left + 3 * seg, battBottom)
+        lineTo(left + 4 * seg, battBottom)
+        lineTo(left + 4 * seg, battTop)
+        lineTo(right, battTop)
+        lineTo(right, bottom)
+        close()
+    }
 }
 
 /** Esagono (punta in alto) inscritto nell'area [w]×[h] (usato dall'Esattore). */

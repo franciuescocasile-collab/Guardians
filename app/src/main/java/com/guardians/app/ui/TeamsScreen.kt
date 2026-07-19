@@ -83,29 +83,22 @@ fun TeamsScreen(
     val teams = (grouped.keys + customTeams).toSortedSet()
         .associateWith { grouped[it] ?: emptyList() }
 
-    // Dialoghi: creazione squadra + conferme di eliminazione/incantesimo.
+    // Dialoghi: creazione squadra + conferma di eliminazione.
     var showCreate by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<String?>(null) }
-    var shadowTarget by remember { mutableStateOf<String?>(null) }
 
-    // Menù rapido del header: scegli la squadra su cui agire.
-    var pickTeamFor by remember { mutableStateOf<String?>(null) } // "shadow" | "delete"
-    pickTeamFor?.let { mode ->
+    // Menù rapido del header: scegli la squadra da eliminare.
+    var pickTeamFor by remember { mutableStateOf<String?>(null) } // "delete"
+    pickTeamFor?.let {
         AlertDialog(
             onDismissRequest = { pickTeamFor = null },
-            title = {
-                Text(
-                    if (mode == "shadow") tr("Ombra su quale squadra?", "Shadow which team?")
-                    else tr("Quale squadra eliminare?", "Which team to delete?")
-                )
-            },
+            title = { Text(tr("Quale squadra eliminare?", "Which team to delete?")) },
             text = {
                 Column {
                     teams.keys.forEach { team ->
                         TextButton(
                             onClick = {
-                                if (mode == "shadow") shadowTarget = team
-                                else deleteTarget = team
+                                deleteTarget = team
                                 pickTeamFor = null
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -133,9 +126,6 @@ fun TeamsScreen(
     }
     deleteTarget?.let { team ->
         ConfirmDeleteTeamDialog(team = team, sealed = sealed, onDismiss = { deleteTarget = null })
-    }
-    shadowTarget?.let { team ->
-        ConfirmShadowTeamDialog(team = team, sealed = sealed, onDismiss = { shadowTarget = null })
     }
 
     Column(
@@ -176,17 +166,6 @@ fun TeamsScreen(
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
-                        text = { Text(tr("Lancia Ombra", "Cast Shadow")) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        onClick = { menuOpen = false; pickTeamFor = "shadow" },
-                    )
-                    DropdownMenuItem(
                         text = { Text(tr("Elimina squadre", "Delete teams")) },
                         leadingIcon = {
                             Icon(
@@ -203,8 +182,8 @@ fun TeamsScreen(
 
         Text(
             tr(
-                "Tieni premuta una squadra per eliminarla o lanciarle un incantesimo.",
-                "Long-press a team to delete it or cast a spell on it.",
+                "Tieni premuta una squadra per cambiarne l'icona o eliminarla.",
+                "Long-press a team to change its icon or delete it.",
             ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -272,7 +251,6 @@ fun TeamsScreen(
         }
 
         teams.forEach { (team, members) ->
-            val shadowed = SpellsRepository.isShadowed(team)
             // Box come àncora del menù contestuale aperto dalla pressione prolungata.
             Box {
                 var menuOpen by remember(team) { mutableStateOf(false) }
@@ -306,10 +284,9 @@ fun TeamsScreen(
                                         "${members.count { it.enabled }} attivi",
                                     "${members.size} guardians · " +
                                         "${members.count { it.enabled }} active",
-                                ) + if (shadowed) tr(" · SOSPESA DALL'OMBRA", " · SHADOWED") else "",
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (shadowed) RedGuardiano
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             // I giorni attivi a colpo d'occhio.
                             WeekDaysStrip(TeamsRepository.daysFor(team))
@@ -338,20 +315,6 @@ fun TeamsScreen(
                         onClick = {
                             menuOpen = false
                             iconTarget = team
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(tr("Lancia Incantesimo", "Cast a spell")) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        onClick = {
-                            menuOpen = false
-                            shadowTarget = team
                         },
                     )
                     DropdownMenuItem(
