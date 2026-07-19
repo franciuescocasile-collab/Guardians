@@ -589,5 +589,5 @@ private fun guardianOverlayDrawable(type: TimerType): Int? = when (type) {
     TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
     TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
     TimerType.MESSAGGERO -> com.guardians.app.R.drawable.guardian_messaggero
-    TimerType.CASTELLANO -> null
+    TimerType.CASTELLANO -> com.guardians.app.R.drawable.guardian_castellano
 }

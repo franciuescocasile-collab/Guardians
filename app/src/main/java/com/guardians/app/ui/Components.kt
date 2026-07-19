@@ -243,8 +243,7 @@ private fun guardianDrawable(type: TimerType): Int? = when (type) {
     TimerType.ESATTORE -> com.guardians.app.R.drawable.guardian_esattore
     TimerType.ARALDO -> com.guardians.app.R.drawable.guardian_araldo
     TimerType.MESSAGGERO -> com.guardians.app.R.drawable.guardian_messaggero
-    // Il Castellano non ha (ancora) un PNG: usa la torre merlata disegnata.
-    TimerType.CASTELLANO -> null
+    TimerType.CASTELLANO -> com.guardians.app.R.drawable.guardian_castellano
 }
 
 /** Torre merlata (con 3 merli in cima) inscritta nell'area [w]×[h] — il Castellano. */

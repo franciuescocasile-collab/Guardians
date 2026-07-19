@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import com.guardians.app.MainActivity
 import com.guardians.app.R
 import com.guardians.app.data.AraldoData
+import com.guardians.app.data.SmartAlarmRepository
 import com.guardians.app.data.ConductRepository
 import com.guardians.app.data.ExclusionsRepository
 import com.guardians.app.data.TeamsRepository
@@ -114,6 +115,13 @@ class MonitorService : Service() {
     private val continuousMs = mutableMapOf<String, Long>()
     private val lastSeenMs = mutableMapOf<String, Long>()
     private val blockedToday = mutableSetOf<String>()
+    // Ultimo giorno (ISO) segnato come "con guardiani" per i traguardi (7.1).
+    private var lastGuardedMark: String = ""
+    // Cache dell'uso REALE per-app di OGGI (dal sistema): il Guardiano
+    // giornaliero la usa per contare in modo robusto, anche se la squadra è
+    // stata spenta e riaccesa o il servizio si è fermato un po' (11).
+    private var perAppTodayCache: Map<String, Long> = emptyMap()
+    private var perAppTodayAt = 0L
     private val lastTriggerMs = mutableMapOf<String, Long>()
 
     // Fine della pausa obbligatoria della Sentinella (epoch ms), per id timer.
@@ -341,6 +349,19 @@ class MonitorService : Service() {
         // Araldo: osserva accensioni e spegnimenti dello schermo FISICO.
         trackScreenForAraldo(screenOn, now)
 
+        // SVEGLIA INTELLIGENTE (12.1): se è "armata", quando lo schermo è spento
+        // da almeno SLEEP_ONSET_MS consideriamo che ti sei addormentato e
+        // programmiamo il risveglio a fine cicli dal momento in cui ti sei spento.
+        run {
+            SmartAlarmRepository.load(this)
+            if (SmartAlarmRepository.isArmed()) {
+                val offSince = AraldoData.screenOffSince(this)
+                if (offSince != 0L && now - offSince >= SmartAlarmRepository.SLEEP_ONSET_MS) {
+                    SmartAlarmRepository.onSleepDetected(this, offSince)
+                }
+            }
+        }
+
         // Resoconto settimanale IN ATTESA: lo spediamo al MATTINO, al primo schermo
         // acceso dopo l'orario di sveglia abituale (o le 07:00), così arriva
         // "quando ti svegli" e non a mezzanotte. Un flag persistito evita doppioni.
@@ -379,6 +400,16 @@ class MonitorService : Service() {
         val timers = if (traveling) emptyList() else TimerRepository.timers.value.filter {
             it.enabled && !SpellsRepository.isShadowed(it.teamName) &&
                 TeamsRepository.isTeamActiveToday(it.teamName)
+        }
+        // Segna il giorno come "con guardiani" (una volta al giorno) per il
+        // traguardo "senza guardiani" (7.1). Guardia in memoria: niente prefs
+        // a ogni tick.
+        if (TimerRepository.timers.value.any { it.enabled }) {
+            val today = LocalDate.now().toString()
+            if (today != lastGuardedMark) {
+                lastGuardedMark = today
+                com.guardians.app.data.BadgesRepository.markGuardedToday(this)
+            }
         }
         // Aggiorna la posizione (Vedetta) solo se serve, e non troppo spesso.
         if (interactive && timers.any { it.type == TimerType.VEDETTA && it.hasLocation } &&
@@ -466,11 +497,25 @@ class MonitorService : Service() {
             when (effectiveType) {
                 TimerType.GUARDIANO -> {
                     if (isTarget) {
+                        // Il Guardiano GIORNALIERO conta dall'uso REALE di oggi
+                        // (dal sistema): così anche se lo disattivi e riattivi,
+                        // appena riprende il potere blocca se hai già sforato (11).
+                        // Settimanale/Mensile restano sull'accumulatore.
+                        val used = if (
+                            timer.resetCycle == com.guardians.app.model.ResetCycle.DAILY
+                        ) {
+                            refreshPerAppToday(now)
+                            val u = guardianDailyUsedMs(timer)
+                            dailyMs[timer.id] = u
+                            u
+                        } else {
+                            val u = (dailyMs[timer.id] ?: 0L) + elapsed
+                            dailyMs[timer.id] = u
+                            u
+                        }
                         if (blockedToday.contains(timer.id)) {
                             trigger(timer, foreground!!, rejected = true)
                         } else {
-                            val used = (dailyMs[timer.id] ?: 0L) + elapsed
-                            dailyMs[timer.id] = used
                             maybeWarn(timer, timer.limitMs - used)
                             if (used >= timer.limitMs) {
                                 blockedToday.add(timer.id)
@@ -960,6 +1005,28 @@ class MonitorService : Service() {
             ).random()
         }
     }
+
+    /**
+     * Aggiorna (max ogni 10s) la cache dell'uso reale per-app di OGGI, letto
+     * dagli eventi di sistema. Robusto: comprende anche il tempo passato mentre
+     * il guardiano era spento o il servizio fermo (11).
+     */
+    private fun refreshPerAppToday(now: Long) {
+        if (perAppTodayCache.isNotEmpty() && now - perAppTodayAt < 10_000L) return
+        val z = java.time.ZoneId.systemDefault()
+        val midnight = LocalDate.now().atStartOfDay(z).toInstant().toEpochMilli()
+        perAppTodayCache = try {
+            com.guardians.app.data.UsageAnalytics.perAppMs(this, midnight, now)
+        } catch (_: Exception) {
+            perAppTodayCache
+        }
+        perAppTodayAt = now
+    }
+
+    /** L'uso reale di oggi per le app sorvegliate dal [timer] (dalla cache). */
+    private fun guardianDailyUsedMs(timer: GuardianTimer): Long =
+        if (timer.allApps) perAppTodayCache.values.sum()
+        else timer.packages.sumOf { perAppTodayCache[it] ?: 0L }
 
     /** Manda la notifica di preavviso se manca meno di [remainingMs] al blocco. */
     private fun maybeWarn(timer: GuardianTimer, remainingMs: Long) {

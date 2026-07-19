@@ -343,7 +343,7 @@ fun UserProfileScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    StreakFlame(streak, Modifier.size(56.dp))
+                    // Scritta SOPRA, poi il fuoco (10).
                     Text(
                         tr(
                             "Giorni consecutivi obiettivo raggiunto",
@@ -353,6 +353,8 @@ fun UserProfileScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
+                    Spacer(Modifier.height(6.dp))
+                    StreakFlame(streak, Modifier.size(56.dp))
                 }
             }
             MetricTile(
@@ -579,17 +581,19 @@ private fun MetricTile(big: String, label: String, modifier: Modifier = Modifier
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(
-                big,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            // Scritta SOPRA, poi il valore grande (10).
             Text(
                 label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                big,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -670,7 +674,16 @@ private fun BadgePin(
     unlocked: Boolean,
     size: androidx.compose.ui.unit.Dp,
 ) {
+    val context = LocalContext.current
     val secret = badge.hidden && !unlocked
+    // IMMAGINE personalizzata (domanda 2): se esiste il drawable
+    // "badge_<nome>" (es. badge_under_2h.png) lo usa al posto dell'emoji.
+    // Così puoi caricare disegni tuoi e rendere l'app più originale.
+    val drawableId = remember(badge) {
+        context.resources.getIdentifier(
+            "badge_${badge.name.lowercase()}", "drawable", context.packageName,
+        )
+    }
     val c1 = if (unlocked) androidx.compose.ui.graphics.Color(badge.color1)
     else androidx.compose.ui.graphics.Color(0xFF9E9E9E)
     val c2 = if (unlocked) androidx.compose.ui.graphics.Color(badge.color2)
@@ -679,33 +692,41 @@ private fun BadgePin(
         Modifier.size(size),
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val r = this.size.minDimension / 2f
-            val center = androidx.compose.ui.geometry.Offset(this.size.width / 2f, this.size.height / 2f)
-            // Bordo esterno chiaro (contorno della spilla).
-            drawCircle(
-                color = androidx.compose.ui.graphics.Color.White.copy(alpha = if (unlocked) 0.85f else 0.25f),
-                radius = r,
-                center = center,
+        if (drawableId != 0 && !secret) {
+            // Disegno tuo: mostrato pieno se sbloccato, in grigio se ancora no.
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(drawableId),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().alpha(if (unlocked) 1f else 0.35f),
             )
-            // Disco con gradiente diagonale.
-            drawCircle(
-                brush = androidx.compose.ui.graphics.Brush.linearGradient(listOf(c1, c2)),
-                radius = r * 0.86f,
-                center = center,
+        } else {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val r = this.size.minDimension / 2f
+                val center = androidx.compose.ui.geometry.Offset(this.size.width / 2f, this.size.height / 2f)
+                // Bordo esterno chiaro (contorno della spilla).
+                drawCircle(
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = if (unlocked) 0.85f else 0.25f),
+                    radius = r,
+                    center = center,
+                )
+                // Disco con gradiente diagonale.
+                drawCircle(
+                    brush = androidx.compose.ui.graphics.Brush.linearGradient(listOf(c1, c2)),
+                    radius = r * 0.86f,
+                    center = center,
+                )
+            }
+            Text(
+                if (secret) "?" else badge.emoji,
+                fontSize = androidx.compose.ui.unit.TextUnit(
+                    size.value * 0.42f,
+                    androidx.compose.ui.unit.TextUnitType.Sp,
+                ),
+                color = androidx.compose.ui.graphics.Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.alpha(if (unlocked || secret) 1f else 0.85f),
             )
         }
-        Text(
-            if (secret) "?" else badge.emoji,
-            fontSize = androidx.compose.ui.unit.TextUnit(
-                size.value * 0.42f,
-                androidx.compose.ui.unit.TextUnitType.Sp,
-            ),
-            color = androidx.compose.ui.graphics.Color.White,
-            fontWeight = FontWeight.Bold,
-            // L'emoji resta pieno; se spento (non segreto) lo attenuiamo un po'.
-            modifier = Modifier.alpha(if (unlocked || secret) 1f else 0.85f),
-        )
     }
 }
 

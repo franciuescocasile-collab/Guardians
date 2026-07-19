@@ -29,6 +29,41 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.16.0",
+            "Sveglia davvero intelligente, condotta sistemata e mille correzioni",
+            "Truly smart alarm, fixed conduct and a thousand fixes",
+            "CONDOTTA: corretto un bug per cui una sola interruzione di " +
+                "congelamento faceva crollare la condotta al rosso per giorni. " +
+                "Ora riparte pulita. SVEGLIA INTELLIGENTE rifatta: scegli i cicli " +
+                "coi pulsanti (niente più slider ostico), poi vai a dormire quando " +
+                "vuoi — l'app si accorge da sola quando ti addormenti e ti sveglia " +
+                "a fine ciclo. CONGELAMENTO: il cerchio resta grande (via il " +
+                "quadrato), lo switch resta durante la sessione, e puoi farti " +
+                "notificare a fine timer con messaggio o suoneria; la pagina non " +
+                "scorre più. GRAFICI: sfondo allineato alle colonne, tocca una " +
+                "barra per il dettaglio, nuovo grafico Media Giornaliera " +
+                "dell'ultimo mese, numeri grandi leggibili oltre le 100h. Il " +
+                "Castellano ora ha il suo elmo e i giorni stanno su una riga. " +
+                "TRAGUARDI: sbloccati solo a giornata conclusa e solo dopo " +
+                "l'installazione (niente più falsi sblocchi); puoi mettere " +
+                "immagini tue al posto delle emoji. Profilo: scritte sopra i " +
+                "valori. E altro ancora.",
+            "CONDUCT: fixed a bug where a single freeze interruption tanked your " +
+                "conduct to red for days. It now restarts clean. SMART ALARM " +
+                "redone: pick cycles with buttons (no more fiddly slider), then " +
+                "go to bed whenever — the app notices when you fall asleep and " +
+                "wakes you at the end of a cycle. FREEZE: the circle stays big " +
+                "(no more square), the switch stays during the session, and you " +
+                "can be notified at the end with a message or a ringtone; the " +
+                "page no longer scrolls. CHARTS: background aligned to columns, " +
+                "tap a bar for details, new Daily Average chart for the last " +
+                "month, big readable numbers beyond 100h. The Castellan now has " +
+                "its helm and the days fit on one row. ACHIEVEMENTS: unlocked " +
+                "only at day's end and only after install (no more false " +
+                "unlocks); you can use your own images instead of emoji. " +
+                "Profile: labels above the values. And more.",
+        ),
+        NewsItem(
             "3.15.0",
             "Grafici rivoluzionati, il Castellano e i Traguardi",
             "Revolutionized charts, the Castellan and Achievements",

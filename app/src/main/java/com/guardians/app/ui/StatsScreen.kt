@@ -1021,7 +1021,9 @@ private fun WeekChart2(
                     var x = -size.height
                     while (x < size.width) {
                         drawLine(
-                            color = dowColor.copy(alpha = 0.30f),
+                            // Campitura più tenue: la media resta in SECONDO
+                            // PIANO, le barre restano protagoniste (stat 14).
+                            color = dowColor.copy(alpha = 0.16f),
                             start = androidx.compose.ui.geometry.Offset(x, size.height),
                             end = androidx.compose.ui.geometry.Offset(x + size.height, 0f),
                             strokeWidth = 2f,
@@ -1029,11 +1031,12 @@ private fun WeekChart2(
                         x += 22f
                     }
                 }
-                // La linea spezzata della media relativa al giorno.
+                // La linea spezzata della media relativa al giorno, più sottile
+                // e trasparente (in secondo piano rispetto alle barre).
                 for (i in 0 until n - 1) {
-                    drawLine(dowColor, pts[i], pts[i + 1], strokeWidth = 3.5f)
+                    drawLine(dowColor.copy(alpha = 0.55f), pts[i], pts[i + 1], strokeWidth = 2f)
                 }
-                pts.forEach { drawCircle(dowColor, radius = 4.5f, center = it) }
+                pts.forEach { drawCircle(dowColor.copy(alpha = 0.55f), radius = 3f, center = it) }
             }
             // Le BARRE colorate, sopra il tratteggio (allineate all'area barre).
             Row(
@@ -1093,12 +1096,9 @@ private fun WeekChart2(
             }
         }
         Spacer(Modifier.height(8.dp))
-        // Legenda delle due guide (piccola, in grigio). Nome più chiaro:
-        // "Media relativa al giorno" invece di "Media del giorno" (stat 2).
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        // Legenda su DUE righe (Column): così i campioncini non finiscono mai
+        // sopra le scritte, nemmeno con testi lunghi (stat 14.1).
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             LegendLine(avgColor, dashed = true, label = tr("Media generale", "Overall avg"))
             LegendLine(
                 dowColor, dashed = false, hatched = true,
@@ -1144,7 +1144,9 @@ private fun LegendLine(
                 )
             }
         }
-        Spacer(Modifier.width(4.dp))
+        // Più spazio tra il campioncino e la scritta, così la campitura non la
+        // copre (stat 14.1).
+        Spacer(Modifier.width(8.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,

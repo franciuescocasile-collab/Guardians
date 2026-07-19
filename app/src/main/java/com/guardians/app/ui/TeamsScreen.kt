@@ -520,7 +520,11 @@ fun WeekDaysStrip(days: Set<Int>) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WeekDaysEditor(days: Set<Int>, onToggle: (Int) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    // CENTRATI nella riga (8): prima erano incollati a sinistra.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         dayInitials().forEachIndexed { i, label ->
             val iso = i + 1
             val on = days.contains(iso)

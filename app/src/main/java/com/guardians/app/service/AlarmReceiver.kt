@@ -29,6 +29,10 @@ class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         try {
+            // La sveglia intelligente ha finito il suo compito: si disarma (o
+            // resta armata per i giorni di ripetizione scelti) — 12.1.
+            com.guardians.app.data.SmartAlarmRepository.onFired(context)
+
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
                 as NotificationManager
 

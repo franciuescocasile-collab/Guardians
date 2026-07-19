@@ -37,7 +37,10 @@ object ConductRepository {
     // Aumenta questo numero quando i coefficienti cambiano abbastanza da voler
     // ripartire con una condotta pulita (evita che vecchi valori "sporchi" da
     // test restino incollati al rosso col motore nuovo, più indulgente).
-    private const val CURRENT_CALIBRATION = 3
+    // v4: corretto il bug del malus risottratto ogni giorno (la condotta
+    // crollava per 10 giorni dopo una sola interruzione di congelamento).
+    // Bump = la condotta riparte pulita col motore corretto.
+    private const val CURRENT_CALIBRATION = 4
 
     /** Valore interno 0..100 (100 = massimo verde). Mai mostrato come numero. */
     private val _conduct = MutableStateFlow(ConductConfig.START_VALUE)
@@ -241,8 +244,12 @@ object ConductRepository {
             value = startValue - ConductConfig.MAX_DAILY_DRAIN
         }
 
-        // Malus degli incantesimi ancora nella finestra mobile (fuori dal tetto).
-        value -= activeMalus(context, LocalDate.parse(date))
+        // NB: i malus NON si risottraggono qui. Vengono già applicati UNA volta
+        // in addMalus, al momento dell'evento. Prima invece venivano tolti di
+        // nuovo a ogni rollover per tutta la finestra mobile (10 giorni): una
+        // sola interruzione di congelamento faceva crollare la condotta per
+        // giorni. Qui ci limitiamo a POTARE gli eventi scaduti.
+        pruneExpiredMalus(context, LocalDate.parse(date))
 
         // Recupero passivo nei giorni puliti.
         if (clean && overTox == 0L) value += ConductConfig.DAILY_RECOVERY
@@ -341,10 +348,9 @@ object ConductRepository {
             .apply()
     }
 
-    /** Somma dei malus ancora dentro la finestra mobile rispetto a [refDate]. */
-    private fun activeMalus(context: Context, refDate: LocalDate): Double {
+    /** Rimuove gli eventi-malus usciti dalla finestra mobile (senza sottrarre). */
+    private fun pruneExpiredMalus(context: Context, refDate: LocalDate) {
         val arr = readMalus(context)
-        var sum = 0.0
         val kept = JSONArray()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
@@ -352,13 +358,10 @@ object ConductRepository {
             if (d != null &&
                 java.time.temporal.ChronoUnit.DAYS.between(d, refDate) < ConductConfig.MALUS_WINDOW_DAYS
             ) {
-                sum += o.getDouble("amount")
                 kept.put(o)
             }
         }
-        // Poto gli eventi scaduti dalla finestra mobile.
         prefs(context).edit().putString(KEY_MALUS, kept.toString()).apply()
-        return sum
     }
 
     private fun readMalus(context: Context): JSONArray =

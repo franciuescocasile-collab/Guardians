@@ -3,6 +3,7 @@ package com.guardians.app.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,6 +83,8 @@ fun CongelamentoScreen(onBack: () -> Unit) {
     val freezeUntil by SpellsRepository.freezeUntil.collectAsState()
     val startedAt by SpellsRepository.freezeStartedAt.collectAsState()
     val overtime by SpellsRepository.freezeOvertime.collectAsState()
+    val notify by SpellsRepository.freezeNotify.collectAsState()
+    val notifyRing by SpellsRepository.freezeNotifyRing.collectAsState()
 
     // Ticker locale: il countdown/cronometro scorre anche senza servizio.
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -107,10 +110,8 @@ fun CongelamentoScreen(onBack: () -> Unit) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         tr(
-                            "Per le sessioni oltre i 120 minuti del cerchio: " +
-                                "scrivi i minuti che vuoi (massimo $CUSTOM_MAX = 6 ore).",
-                            "For sessions beyond the circle's 120 minutes: " +
-                                "type the minutes you want (max $CUSTOM_MAX = 6 hours).",
+                            "Di quanti minuti vuoi che sia il congelamento?",
+                            "How many minutes should the freeze last?",
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -208,9 +209,8 @@ fun CongelamentoScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -231,67 +231,58 @@ fun CongelamentoScreen(onBack: () -> Unit) {
         }
 
         if (sessionActive) {
-            // ------------------------------- sessione in corso (vetro ghiacciato)
+            // ------------------------------- sessione in corso
             val inOvertime = now >= freezeUntil
             val totalMs = (freezeUntil - startedAt).coerceAtLeast(1L)
             val remainingFrac = if (inOvertime) 0f
             else ((freezeUntil - now).toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
-            // Pannello semi-trasparente con bordo luminoso azzurro ghiaccio
-            // (#E0F7FA) e opacità bassissima: l'effetto "vetro ghiacciato".
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(androidx.compose.ui.graphics.Color(0x14E0F7FA))
-                    .border(
-                        width = 1.dp,
-                        color = androidx.compose.ui.graphics.Color(0x99E0F7FA),
-                        shape = RoundedCornerShape(28.dp),
-                    )
-                    .padding(20.dp),
-            ) {
-            FreezeCircle(
-                progress = if (inOvertime) 1f else 1f - remainingFrac,
-                enabled = false,
-                onMinutesChange = {},
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        if (inOvertime) {
-                            tr("più ", "") + formatMs((now - freezeUntil).coerceAtLeast(1000L))
-                        } else {
-                            formatMs((freezeUntil - now).coerceAtLeast(1000L))
-                        },
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
-                    )
-                    // In overtime resta la scritta motivante; durante il conto
-                    // alla rovescia il centro mostra solo il tempo (2).
-                    if (inOvertime) {
+            // Il cerchio resta GROSSO come in impostazione: niente più quadrato
+            // di vetro attorno (15). Prende lo spazio disponibile.
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                FreezeCircle(
+                    progress = if (inOvertime) 1f else 1f - remainingFrac,
+                    enabled = false,
+                    onMinutesChange = {},
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            tr("tempo extra conquistato", "extra time conquered"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            if (inOvertime) {
+                                tr("più ", "") + formatMs((now - freezeUntil).coerceAtLeast(1000L))
+                            } else {
+                                formatMs((freezeUntil - now).coerceAtLeast(1000L))
+                            },
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
                         )
+                        if (inOvertime) {
+                            Text(
+                                tr("tempo extra conquistato", "extra time conquered"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }
-            if (inOvertime) {
+            // Lo switch resta disponibile anche in sessione (15.1): decidi se
+            // farla continuare oltre la scadenza anche dopo averla avviata.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(
                     tr(
-                        "Il tempo è scaduto ma la sessione continua: stai " +
-                            "dimostrando di poterne fare a meno. Termina quando vuoi.",
-                        "Time's up but the session goes on: you're proving you " +
-                            "can do without it. End whenever you want.",
+                        "Continua a contare dopo la scadenza",
+                        "Keep counting after time's up",
                     ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = overtime,
+                    onCheckedChange = { SpellsRepository.setFreezeOvertime(context, it) },
                 )
             }
             Button(
@@ -313,46 +304,89 @@ fun CongelamentoScreen(onBack: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                 )
             }
-            }
         } else {
             // ------------------------------------------ scelta della durata
-            Text(
-                tr(
-                    "Scorri il dito lungo il cerchio per decidere quanto stare " +
-                        "tassativamente lontano dal telefono.",
-                    "Slide your finger around the circle to decide how long to " +
-                        "stay strictly away from the phone.",
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            FreezeCircle(
-                progress = ((minutes - CIRCLE_MIN).toFloat() /
-                    (CIRCLE_MAX - CIRCLE_MIN).toFloat()).coerceIn(0f, 1f),
-                enabled = true,
-                onMinutesChange = { minutes = it },
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "$minutes",
-                        style = MaterialTheme.typography.displayLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        tr("minuti", "minutes"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            // Cerchio al centro dello spazio libero (niente scroll, 15.4).
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                FreezeCircle(
+                    progress = ((minutes - CIRCLE_MIN).toFloat() /
+                        (CIRCLE_MAX - CIRCLE_MIN).toFloat()).coerceIn(0f, 1f),
+                    enabled = true,
+                    onMinutesChange = { minutes = it },
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "$minutes",
+                            style = MaterialTheme.typography.displayLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            tr("minuti", "minutes"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             TextButton(
                 onClick = { customDialog = true },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(tr("Personalizza", "Customize"))
+                Text(tr("Personalizza i minuti", "Customize minutes"))
+            }
+
+            // -------- impostazioni compatte (stanno senza scrollare, 15.4)
+            // Continua a contare dopo la scadenza.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    tr(
+                        "Continua a contare dopo la scadenza",
+                        "Keep counting after time's up",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = overtime,
+                    onCheckedChange = { SpellsRepository.setFreezeOvertime(context, it) },
+                )
+            }
+            // Notificami quando finisce il timer (15.2).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    tr("Notificami quando finisce", "Notify me when it ends"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = notify,
+                    onCheckedChange = { SpellsRepository.setFreezeNotify(context, it) },
+                )
+            }
+            // Scelta tra notifica-messaggio e suoneria (15.3), solo se acceso.
+            if (notify) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    NotifyChoice(
+                        label = tr("Messaggio", "Message"),
+                        selected = !notifyRing,
+                        modifier = Modifier.weight(1f),
+                    ) { SpellsRepository.setFreezeNotifyRing(context, false) }
+                    NotifyChoice(
+                        label = tr("Suoneria", "Ringtone"),
+                        selected = notifyRing,
+                        modifier = Modifier.weight(1f),
+                    ) { SpellsRepository.setFreezeNotifyRing(context, true) }
+                }
             }
             Button(
                 onClick = {
@@ -368,53 +402,6 @@ fun CongelamentoScreen(onBack: () -> Unit) {
                     tr("Congela per ", "Freeze for ") + formatMs(minutes * 60_000L),
                     fontWeight = FontWeight.Bold,
                 )
-            }
-
-            // ------------------------------------- impostazioni avanzate
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-            ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        tr("Impostazioni avanzate", "Advanced settings"),
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                tr(
-                                    "Continua a contare dopo la scadenza",
-                                    "Keep counting after time's up",
-                                )
-                            )
-                            Text(
-                                tr(
-                                    "Allo 00:00 la sessione non finisce: parte un " +
-                                        "cronometro (+minuti) e il blocco regge finché " +
-                                        "non la termini tu. Quanto riesci a resistere?",
-                                    "At 00:00 the session doesn't end: a stopwatch " +
-                                        "(+minutes) starts and the lock holds until you " +
-                                        "end it. How long can you hold out?",
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = overtime,
-                            onCheckedChange = {
-                                SpellsRepository.setFreezeOvertime(context, it)
-                            },
-                        )
-                    }
-                }
             }
         }
     }
@@ -540,6 +527,35 @@ private fun SnowfallOverlay(intensity: Float, modifier: Modifier = Modifier) {
                 center = Offset(x, y),
             )
         }
+    }
+}
+
+/** Pillola di scelta (Messaggio / Suoneria) per la notifica di fine timer. */
+@Composable
+private fun NotifyChoice(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant,
+                RoundedCornerShape(10.dp),
+            )
+            .clickable { onClick() }
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

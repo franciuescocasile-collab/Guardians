@@ -115,6 +115,37 @@ fun hourlySeries(context: android.content.Context): List<Pair<String, Long>> =
     hourlySeriesFor(context, LocalDate.now())
 
 /**
+ * MEDIA per ORA del giorno sulle ultime [days] giornate (default 28 = 4
+ * settimane): per ogni fascia oraria, quanto in media hai usato il telefono.
+ * Serve al grafico "Media giornaliera" (2): l'andamento tipico della giornata.
+ */
+fun hourlyAverageSeries(
+    context: android.content.Context,
+    days: Int = 28,
+): List<Pair<String, Long>> {
+    val z = java.time.ZoneId.systemDefault()
+    // NIENTE dati da PRIMA dell'installazione (domanda 1): non si scende sotto
+    // la data del primo uso, anche se Android conserva lo storico più indietro.
+    val firstUse = try {
+        LocalDate.parse(com.guardians.app.data.ProfileRepository.firstUseDate.value)
+    } catch (_: Exception) {
+        LocalDate.now()
+    }
+    val totals = LongArray(24)
+    var counted = 0
+    for (back in 0 until days) {
+        val date = LocalDate.now().minusDays(back.toLong())
+        if (date.isBefore(firstUse)) break
+        val dayStart = date.atStartOfDay(z).toInstant().toEpochMilli()
+        val h = com.guardians.app.data.UsageAnalytics.hourlyTotals(context, dayStart)
+        for (i in 0..23) totals[i] += h[i]
+        counted++
+    }
+    val div = counted.coerceAtLeast(1)
+    return (0..23).map { hour -> "$hour" to (totals[hour] / div) }
+}
+
+/**
  * UTILIZZO della settimana a [weeksBack] settimane fa (0 = questa): un giorno
  * per barra, dal primo giorno impostato. Futuro = vuoto.
  */
@@ -296,27 +327,52 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
     val bandColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
     val refColor = MaterialTheme.colorScheme.onSurfaceVariant
     val topLabelPad = 16f  // spazio riservato in cima per il minutaggio
-    // Stessa altezza del grafico giornaliero (150dp), così passando da un
-    // periodo all'altro il grafico non "salta" di dimensione (stat 8).
     val barH = 134f + topLabelPad
     // Spazio a SINISTRA per le etichette orarie (stat 1: "fai spazio").
     val leftPad = 30f
     val n = series.size
+    // Sopra le 100 ore l'etichetta "150h" non ci sta: mostriamo solo il numero
+    // e la nota "in ore" in alto (stat 3).
+    val hoursOnly = maxMs >= 100L * 3_600_000L
+    // Barra selezionata col tocco → tooltip col tempo PRECISO (stat 9).
+    var selected by remember(series) { mutableStateOf(-1) }
     Column {
+        // Tooltip: quando tocchi una barra, il tempo esatto di quel periodo.
+        Box(Modifier.fillMaxWidth().height(20.dp), contentAlignment = Alignment.Center) {
+            if (selected in series.indices) {
+                Text(
+                    "${series[selected].first} · ${formatMs(series[selected].second)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else if (hoursOnly) {
+                Text(
+                    tr("valori in ore · tocca una barra", "values in hours · tap a bar"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    tr("tocca una barra per il dettaglio", "tap a bar for details"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(barH.dp),
         ) {
-            // SFONDO (2.6.1): bande di colonna alternate + righe orarie di
-            // riferimento con etichetta a sinistra, così le barre non sembrano
-            // messe a caso.
+            // SFONDO: bande di colonna alternate ALLINEATE alle barre + righe
+            // orarie di riferimento con etichetta a sinistra (stat 1: lo sfondo
+            // non è più sfalsato, colW è lo stesso delle barre).
             Canvas(Modifier.fillMaxSize()) {
                 val plotTop = topLabelPad
                 val plotH = size.height - plotTop
                 val colAreaW = size.width - leftPad
                 val colW = colAreaW / n
-                // Bande alternate.
                 for (i in 0 until n step 2) {
                     drawRect(
                         color = bandColor,
@@ -324,7 +380,6 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                         size = androidx.compose.ui.geometry.Size(colW, plotH),
                     )
                 }
-                // Righe orarie.
                 val step = gridStepMs(maxMs)
                 val labelPaint = android.graphics.Paint().apply {
                     color = refColor.copy(alpha = 0.7f).toArgb()
@@ -347,19 +402,30 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                     v += step
                 }
             }
-            // Area barre, spostata a destra per lasciare spazio alle etichette.
+            // Area barre: NIENTE spaziatura tra le colonne, così ogni barra sta
+            // esattamente dentro la sua banda di sfondo (stat 1).
             Row(
                 verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(start = leftPad.dp, top = topLabelPad.dp),
             ) {
-                series.forEach { (_, ms) ->
-                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.BottomCenter) {
+                series.forEachIndexed { i, pair ->
+                    val ms = pair.second
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = remember {
+                                    androidx.compose.foundation.interaction.MutableInteractionSource()
+                                },
+                                indication = null,
+                            ) { selected = if (selected == i) -1 else i },
+                        contentAlignment = Alignment.BottomCenter,
+                    ) {
                         if (ms > 0L) {
                             val frac = (ms.toFloat() / maxMs.toFloat()).coerceIn(0.02f, 1f)
-                            // Il minutaggio sopra la barra.
                             Box(
                                 Modifier.fillMaxWidth(0.7f).fillMaxHeight(frac),
                                 contentAlignment = Alignment.TopCenter,
@@ -368,12 +434,16 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                                     Modifier
                                         .fillMaxSize()
                                         .background(
-                                            barColor,
+                                            if (selected == i) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                barColor
+                                            },
                                             RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp),
                                         )
                                 )
                                 Text(
-                                    shortLabel(ms),
+                                    if (hoursOnly) "${ms / 3_600_000L}" else shortLabel(ms),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = barColor,
                                     fontWeight = FontWeight.Bold,
@@ -412,9 +482,8 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
             }
         }
         Spacer(Modifier.height(4.dp))
-        // Etichette a una sola riga sotto ogni barra (allineate all'area barre).
+        // Etichette a una sola riga sotto ogni barra (senza spaziatura: allineate).
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxWidth().padding(start = leftPad.dp),
         ) {
             series.forEach { (label, _) ->
@@ -682,9 +751,10 @@ fun StatsTimeDetail(onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(12.dp))
-                var mode by remember { mutableStateOf(ChartMode.WEEKLY) }
+                var mode by remember { mutableStateOf(ChartMode.DAILY) }
                 ModeTabs(
                     modes = listOf(
+                        ChartMode.DAILY to tr("Giornaliero", "Daily"),
                         ChartMode.WEEKLY to tr("Settimanale", "Weekly"),
                         ChartMode.MONTHLY to tr("Mensile", "Monthly"),
                         ChartMode.YEARLY to tr("Annuale", "Yearly"),
@@ -694,6 +764,37 @@ fun StatsTimeDetail(onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(12.dp))
                 when (mode) {
+                    // Media GIORNALIERA (2): la linea dell'andamento tipico della
+                    // giornata, media per ora sulle ultime 4 settimane.
+                    ChartMode.DAILY -> {
+                        Text(
+                            tr(
+                                "Andamento medio della giornata · ultime 4 settimane",
+                                "Typical day pattern · last 4 weeks",
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        )
+                        val avgHourly by androidx.compose.runtime.produceState<List<Pair<String, Long>>?>(
+                            initialValue = null,
+                        ) {
+                            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                hourlyAverageSeries(context)
+                            }
+                        }
+                        val data = avgHourly
+                        if (data == null) {
+                            Box(
+                                Modifier.fillMaxWidth().height(150.dp),
+                                contentAlignment = Alignment.Center,
+                            ) { Text(tr("…", "…")) }
+                        } else {
+                            HourLineChart(data, cutAtNow = false)
+                        }
+                    }
+
                     ChartMode.WEEKLY -> {
                         Text(
                             tr("Media per giorno · ultime 4 settimane", "Per-day avg · last 4 weeks"),
@@ -707,7 +808,7 @@ fun StatsTimeDetail(onBack: () -> Unit) {
 
                     ChartMode.MONTHLY -> {
                         Text(
-                            tr("Media a settimana · ultime 5", "Weekly avg · last 5"),
+                            tr("Media a settimana", "Weekly average"),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -722,8 +823,6 @@ fun StatsTimeDetail(onBack: () -> Unit) {
                     ) { b ->
                         PeriodBarChart(yearSeries(history, b, totals = false), 0L)
                     }
-
-                    ChartMode.DAILY -> Unit // la media giornaliera vive nel profilo
                 }
             }
         }

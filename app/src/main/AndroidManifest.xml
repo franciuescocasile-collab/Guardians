@@ -100,6 +100,11 @@
         <receiver
             android:name=".service.AlarmReceiver"
             android:exported="false" />
+
+        <!-- Fine del Congelamento: notifica-messaggio o suoneria (opzionale). -->
+        <receiver
+            android:name=".service.FreezeEndReceiver"
+            android:exported="false" />
         <activity
             android:name=".AlarmActivity"
             android:exported="false"

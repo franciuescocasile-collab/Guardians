@@ -22,6 +22,9 @@ object SmartAlarmRepository {
     private const val KEY_ALARM_AT = "smart_alarm_at"
     private const val KEY_CYCLES = "smart_alarm_cycles"
     private const val KEY_DAYS = "smart_alarm_days"
+    private const val KEY_ARMED = "smart_alarm_armed"
+    private const val KEY_SLEEP_START = "smart_alarm_sleep_start"
+    private const val KEY_ARMED_AT = "smart_alarm_armed_at"
     private const val REQUEST_CODE = 4242
 
     /** Un ciclo di sonno completo (~90 minuti). */
@@ -30,9 +33,23 @@ object SmartAlarmRepository {
     /** Tempo medio per addormentarsi, aggiunto in coda al calcolo. */
     const val FALL_ASLEEP_MS = 15L * 60_000L
 
+    /**
+     * Schermo spento in modo continuo per almeno questo tempo = "ti sei
+     * addormentato" (la sveglia intelligente parte da qui, 12.1).
+     */
+    const val SLEEP_ONSET_MS = 20L * 60_000L
+
     /** Quando suonerà (epoch ms); 0 = nessuna sveglia attiva. */
     private val _alarmAt = MutableStateFlow(0L)
     val alarmAt: StateFlow<Long> = _alarmAt
+
+    /**
+     * ARMATA (12.1): l'utente ha attivato la sveglia intelligente ma NON è
+     * ancora programmata a un orario; l'app aspetta di accorgersi che ti sei
+     * addormentato e solo allora calcola l'orario del risveglio.
+     */
+    private val _armed = MutableStateFlow(false)
+    val armed: StateFlow<Boolean> = _armed
 
     /** Cicli scelti (3..7); consigliati 5 (7h30) o 6 (9h). */
     private val _cycles = MutableStateFlow(5)
@@ -54,6 +71,7 @@ object SmartAlarmRepository {
         loaded = true
         val p = prefs(context)
         _alarmAt.value = p.getLong(KEY_ALARM_AT, 0L)
+        _armed.value = p.getBoolean(KEY_ARMED, false)
         _cycles.value = p.getInt(KEY_CYCLES, 5).coerceIn(3, 7)
         _days.value = try {
             val arr = org.json.JSONArray(p.getString(KEY_DAYS, "[]"))
@@ -65,6 +83,75 @@ object SmartAlarmRepository {
         if (_alarmAt.value in 1 until System.currentTimeMillis()) {
             _alarmAt.value = 0L
             p.edit().putLong(KEY_ALARM_AT, 0L).apply()
+        }
+    }
+
+    fun isArmed(): Boolean = _armed.value
+
+    /**
+     * ARMA la sveglia intelligente (12.1): da ora l'app aspetta di accorgersi
+     * che ti addormenti (schermo spento a lungo) e SOLO ALLORA programma il
+     * risveglio dopo [cycles] cicli. Niente orario fisso adesso.
+     */
+    fun arm(context: Context) {
+        load(context)
+        cancelAlarmOnly(context)
+        _armed.value = true
+        prefs(context).edit()
+            .putBoolean(KEY_ARMED, true)
+            .putLong(KEY_ARMED_AT, System.currentTimeMillis())
+            .putLong(KEY_SLEEP_START, 0L)
+            .apply()
+    }
+
+    /**
+     * Chiamata dal servizio quando lo schermo è spento da abbastanza tempo
+     * ([sleepStart] = quando si è spento). Programma (o riprogramma se il sonno
+     * è ricominciato più tardi) il risveglio a fine cicli.
+     */
+    fun onSleepDetected(context: Context, sleepStart: Long) {
+        load(context)
+        if (!_armed.value) return
+        val p = prefs(context)
+        // Solo per addormentamenti iniziati DOPO l'attivazione.
+        if (sleepStart < p.getLong(KEY_ARMED_AT, 0L)) return
+        // Stesso sonno già gestito: non toccare nulla.
+        if (p.getLong(KEY_SLEEP_START, 0L) == sleepStart) return
+        val wakeAt = sleepStart + _cycles.value * CYCLE_MS
+        // Se ci sono giorni di ripetizione, sveglia solo se il RISVEGLIO cade in
+        // uno di quelli (i giorni si riferiscono al giorno del risveglio).
+        val set = _days.value
+        if (set.isNotEmpty()) {
+            val wakeDow = java.time.Instant.ofEpochMilli(wakeAt)
+                .atZone(java.time.ZoneId.systemDefault()).dayOfWeek.value
+            if (wakeDow !in set) return
+        }
+        p.edit().putLong(KEY_SLEEP_START, sleepStart).apply()
+        // Risveglio = inizio sonno + cicli interi (l'addormentamento è già
+        // avvenuto, quindi niente margine di FALL_ASLEEP qui).
+        scheduleAt(context, wakeAt)
+    }
+
+    /**
+     * La sveglia è appena suonata: se non ci sono giorni di ripetizione si
+     * disarma; se ci sono, resta armata e riparte l'attesa del prossimo sonno.
+     */
+    fun onFired(context: Context) {
+        load(context)
+        cancelAlarmOnly(context)
+        if (_days.value.isEmpty()) {
+            _armed.value = false
+            prefs(context).edit()
+                .putBoolean(KEY_ARMED, false)
+                .putLong(KEY_SLEEP_START, 0L)
+                .apply()
+        } else {
+            _armed.value = true
+            prefs(context).edit()
+                .putBoolean(KEY_ARMED, true)
+                .putLong(KEY_SLEEP_START, 0L)
+                .putLong(KEY_ARMED_AT, System.currentTimeMillis())
+                .apply()
         }
     }
 
@@ -137,9 +224,8 @@ object SmartAlarmRepository {
         }
     }
 
-    /** Spegne/annulla la sveglia (sia futura sia appena suonata). */
-    fun cancel(context: Context) {
-        load(context)
+    /** Annulla SOLO l'allarme programmato (senza toccare lo stato "armata"). */
+    private fun cancelAlarmOnly(context: Context) {
         try {
             val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             am.cancel(firePending(context))
@@ -147,6 +233,17 @@ object SmartAlarmRepository {
         }
         _alarmAt.value = 0L
         prefs(context).edit().putLong(KEY_ALARM_AT, 0L).apply()
+    }
+
+    /** Spegne/annulla la sveglia (futura, in attesa o appena suonata) e disarma. */
+    fun cancel(context: Context) {
+        load(context)
+        cancelAlarmOnly(context)
+        _armed.value = false
+        prefs(context).edit()
+            .putBoolean(KEY_ARMED, false)
+            .putLong(KEY_SLEEP_START, 0L)
+            .apply()
     }
 
     private fun firePending(context: Context): PendingIntent =

@@ -98,6 +98,11 @@ enum class Badge(
 object BadgesRepository {
     private const val PREFS = "guardians_prefs"
     private const val KEY = "badges_unlocked"
+    // Data (ISO) dal quale i traguardi valgono: NIENTE di prima dell'app (7.2).
+    private const val KEY_SINCE = "badges_since"
+    // Giorni (ISO) in cui c'era almeno un guardiano ATTIVO: NON contano come
+    // "senza guardiani" (7.1). Aggiornati dal servizio giorno per giorno.
+    private const val KEY_GUARDED_DAYS = "badges_guarded_days"
 
     private val _unlocked = MutableStateFlow<Set<String>>(emptySet())
     val unlocked: StateFlow<Set<String>> = _unlocked
@@ -106,8 +111,23 @@ object BadgesRepository {
     fun load(context: Context) {
         if (loaded) return
         loaded = true
-        _unlocked.value = parse(prefs(context).getString(KEY, null))
+        val p = prefs(context)
+        _unlocked.value = parse(p.getString(KEY, null))
+        // Prima esecuzione: fissa "da oggi". Da qui in poi si contano i giorni.
+        if (!p.contains(KEY_SINCE)) {
+            p.edit().putString(KEY_SINCE, LocalDate.now().toString()).apply()
+        }
     }
+
+    /** La data (inclusa) dalla quale i traguardi possono contare. */
+    private fun since(context: Context): LocalDate =
+        try {
+            LocalDate.parse(
+                prefs(context).getString(KEY_SINCE, LocalDate.now().toString())!!,
+            )
+        } catch (_: Exception) {
+            LocalDate.now()
+        }
 
     fun isUnlocked(b: Badge): Boolean = b.name in _unlocked.value
 
@@ -120,18 +140,41 @@ object BadgesRepository {
     }
 
     /**
-     * Valuta TUTTE le condizioni con i dati disponibili e sblocca i traguardi
-     * raggiunti. Da chiamare quando si apre il profilo e alla fine di una
-     * sessione di congelamento.
+     * Da chiamare dal servizio (una volta al giorno basta): segna il giorno di
+     * OGGI come "con guardiani" se ce n'è almeno uno attivo. Serve al traguardo
+     * "senza guardiani" per sapere quali giorni NON contano (7.1).
+     */
+    fun markGuardedToday(context: Context) {
+        load(context)
+        val p = prefs(context)
+        val today = LocalDate.now().toString()
+        val set = parse(p.getString(KEY_GUARDED_DAYS, null)).toMutableSet()
+        if (today !in set) {
+            set.add(today)
+            p.edit().putString(KEY_GUARDED_DAYS, JSONArray(set.toList()).toString()).apply()
+        }
+    }
+
+    /**
+     * Valuta le condizioni sui dati COMPLETATI (mai il giorno di oggi, che è
+     * ancora in corso) e sblocca i traguardi. I giorni prima dell'installazione
+     * non contano. Da chiamare all'apertura del profilo.
      */
     fun evaluate(context: Context) {
         load(context)
         UsageHistoryRepository.load(context)
         SpellsRepository.load(context)
 
-        // Minimo d'uso in un singolo giorno (giorni a 0 esclusi: è "nessun dato").
+        val since = since(context)
+        val today = LocalDate.now()
         val history = UsageHistoryRepository.history.value
-        val minDay = history.values.filter { it > 0L }.minOrNull() ?: Long.MAX_VALUE
+        // Solo giorni COMPLETATI (< oggi) e dall'installazione in poi.
+        val completed = history.mapNotNull { (k, v) ->
+            val d = try { LocalDate.parse(k) } catch (_: Exception) { null }
+            if (d != null && d.isBefore(today) && !d.isBefore(since) && v > 0L) d to v else null
+        }.toMap()
+
+        val minDay = completed.values.minOrNull() ?: Long.MAX_VALUE
         if (minDay < 2L * 3_600_000L) unlock(context, Badge.UNDER_2H)
         if (minDay < 1L * 3_600_000L) unlock(context, Badge.UNDER_1H)
         if (minDay < 10L * 60_000L) unlock(context, Badge.UNDER_10MIN)
@@ -148,12 +191,13 @@ object BadgesRepository {
         if (best >= 30) unlock(context, Badge.GOAL_30)
         if (best >= 365) unlock(context, Badge.GOAL_365)
 
-        // Sotto l'obiettivo SENZA guardiani: nessun timer attivo e un giorno
-        // completato (ieri) sotto la soglia.
+        // Sotto l'obiettivo SENZA guardiani (7.1): un giorno COMPLETATO, sotto
+        // la soglia, che NON era tra i giorni con guardiani attivi.
         val goalMs = ProfileRepository.dailyGoalMinutes.value * 60_000L
-        if (goalMs > 0L && TimerRepository.timers.value.none { it.enabled }) {
-            val yesterday = history[LocalDate.now().minusDays(1).toString()] ?: -1L
-            if (yesterday in 0 until goalMs) unlock(context, Badge.UNDER_GOAL_NO_GUARDIANS)
+        if (goalMs > 0L) {
+            val guarded = parse(prefs(context).getString(KEY_GUARDED_DAYS, null))
+            val ok = completed.any { (d, ms) -> ms < goalMs && d.toString() !in guarded }
+            if (ok) unlock(context, Badge.UNDER_GOAL_NO_GUARDIANS)
         }
     }
 

@@ -1,5 +1,6 @@
 package com.guardians.app.data
 
+import android.app.AlarmManager
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,9 @@ object SpellsRepository {
     private const val KEY_FREEZE_STARTED = "spell_freeze_started"
     private const val KEY_FREEZE_OVERTIME = "spell_freeze_overtime"
     private const val KEY_LONGEST_FREEZE = "record_longest_freeze"
+    private const val KEY_FREEZE_NOTIFY = "spell_freeze_notify"
+    private const val KEY_FREEZE_NOTIFY_RING = "spell_freeze_notify_ring"
+    private const val FREEZE_END_REQUEST = 5150
 
     /** Scelte rapide predefinite (minuti) quando non c'è ancora uno storico. */
     private val DEFAULT_QUICK_MINUTES = listOf(15, 60, 180)
@@ -41,6 +45,18 @@ object SpellsRepository {
     private val _freezeOvertime = MutableStateFlow(false)
     val freezeOvertime: StateFlow<Boolean> = _freezeOvertime
 
+    /**
+     * "Notificami quando finisce il timer" (15.2): spento di default ma la
+     * scelta viene RICORDATA. Se acceso, allo scadere del tempo arriva una
+     * notifica (messaggio) o una suoneria tipo sveglia, a seconda di [freezeNotifyRing].
+     */
+    private val _freezeNotify = MutableStateFlow(false)
+    val freezeNotify: StateFlow<Boolean> = _freezeNotify
+
+    /** true = suoneria (come sveglia); false = notifica-messaggio (15.3). */
+    private val _freezeNotifyRing = MutableStateFlow(false)
+    val freezeNotifyRing: StateFlow<Boolean> = _freezeNotifyRing
+
     private val _shadowUntil = MutableStateFlow(0L)
     val shadowUntil: StateFlow<Long> = _shadowUntil
 
@@ -57,6 +73,8 @@ object SpellsRepository {
         _freezeUntil.value = p.getLong(KEY_FREEZE, 0L)
         _freezeStartedAt.value = p.getLong(KEY_FREEZE_STARTED, 0L)
         _freezeOvertime.value = p.getBoolean(KEY_FREEZE_OVERTIME, false)
+        _freezeNotify.value = p.getBoolean(KEY_FREEZE_NOTIFY, false)
+        _freezeNotifyRing.value = p.getBoolean(KEY_FREEZE_NOTIFY_RING, false)
         _shadowUntil.value = p.getLong(KEY_SHADOW, 0L)
         val raw = p.getString(KEY_SHADOW_TEAMS, null)
         if (raw != null) {
@@ -86,6 +104,50 @@ object SpellsRepository {
             .putLong(KEY_FREEZE, untilEpochMs)
             .putLong(KEY_FREEZE_STARTED, _freezeStartedAt.value)
             .apply()
+        // Notifica di fine timer (15.2/15.3): programma o annulla la sveglia.
+        if (untilEpochMs > System.currentTimeMillis() && _freezeNotify.value) {
+            scheduleFreezeEnd(context, untilEpochMs)
+        } else {
+            cancelFreezeEnd(context)
+        }
+    }
+
+    fun setFreezeNotify(context: Context, enabled: Boolean) {
+        _freezeNotify.value = enabled
+        prefs(context).edit().putBoolean(KEY_FREEZE_NOTIFY, enabled).apply()
+    }
+
+    fun setFreezeNotifyRing(context: Context, ring: Boolean) {
+        _freezeNotifyRing.value = ring
+        prefs(context).edit().putBoolean(KEY_FREEZE_NOTIFY_RING, ring).apply()
+    }
+
+    private fun freezeEndPending(context: Context): android.app.PendingIntent =
+        android.app.PendingIntent.getBroadcast(
+            context, FREEZE_END_REQUEST,
+            android.content.Intent(
+                context, com.guardians.app.service.FreezeEndReceiver::class.java,
+            ),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                android.app.PendingIntent.FLAG_IMMUTABLE,
+        )
+
+    private fun scheduleFreezeEnd(context: Context, atEpochMs: Long) {
+        try {
+            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            am.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP, atEpochMs, freezeEndPending(context),
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun cancelFreezeEnd(context: Context) {
+        try {
+            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            am.cancel(freezeEndPending(context))
+        } catch (_: Throwable) {
+        }
     }
 
     fun breakFreeze(context: Context) = castFreeze(context, 0L)

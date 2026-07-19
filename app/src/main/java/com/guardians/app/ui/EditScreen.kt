@@ -956,9 +956,9 @@ fun EditScreen(
 
 /**
  * I 7 giorni della settimana come pillole selezionabili (Castellano): 1 = lun …
- * 7 = dom, nell'ordine del primo giorno scelto nelle impostazioni.
+ * 7 = dom, nell'ordine del primo giorno scelto nelle impostazioni. Stanno tutti
+ * su UNA riga (peso uguale), niente "dom" a capo (6).
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun WeekDaySelector(selected: Set<Int>, onToggle: (Int) -> Unit) {
     val locale = if (com.guardians.app.data.SettingsRepository.english.value) {
@@ -969,25 +969,27 @@ private fun WeekDaySelector(selected: Set<Int>, onToggle: (Int) -> Unit) {
     val startMonday = com.guardians.app.data.SettingsRepository.weekStartMonday.value
     // Ordine 1..7 (lun..dom) oppure con la domenica davanti.
     val order = if (startMonday) (1..7).toList() else listOf(7, 1, 2, 3, 4, 5, 6)
-    androidx.compose.foundation.layout.FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         order.forEach { day ->
             val on = day in selected
+            // Iniziale del giorno (L, M, M, G, V, S, D): compatta, ci sta in 7.
             val label = java.time.DayOfWeek.of(day)
-                .getDisplayName(java.time.format.TextStyle.SHORT, locale)
-                .replaceFirstChar { it.uppercase() }
+                .getDisplayName(java.time.format.TextStyle.NARROW, locale)
+                .uppercase(locale)
             Box(
                 Modifier
+                    .weight(1f)
                     .background(
                         if (on) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceVariant,
-                        RoundedCornerShape(12.dp),
+                        RoundedCornerShape(10.dp),
                     )
                     .clickable { onToggle(day) }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     label,
