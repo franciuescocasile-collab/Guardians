@@ -29,6 +29,37 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.17.0",
+            "Sonno più sveglio, condotta solo sul tempo, elmo del Castellano",
+            "Smarter sleep, conduct on time only, Castellan's helm",
+            "SONNO: lo slider dei cicli torna com'era, ma col pallino grande e " +
+                "facile da prendere (e tocchi anche direttamente il punto). " +
+                "SVEGLIA: i risvegli notturni NON spostano più l'orario (chi va a " +
+                "letto a mezzanotte non rischia più di dormire 13 ore); non è " +
+                "toccata dal risparmio energetico (suona anche all'1%). ARALDO: " +
+                "un'occhiata breve o una notifica NON contano come risveglio (ci " +
+                "vogliono 10 minuti di uso vero); un digiuno diurno non è più " +
+                "scambiato per una dormita; ora usa anche la tua sveglia di " +
+                "sistema per capire quando ti alzi. CONDOTTA: tolti tutti i malus " +
+                "(incantesimi, congelamenti interrotti): la valutazione dipende " +
+                "SOLO dal tempo speso al telefono. Elmo del CASTELLANO ritagliato " +
+                "e della stessa grandezza degli altri. E ho preparato in docs/ la " +
+                "spiegazione della logica di guardiani, squadre, congelamento, " +
+                "araldo, sveglia, sonno e condotta.",
+            "SLEEP: the cycle slider is back as it was, but with a big, " +
+                "easy-to-grab knob (and you can tap the point directly). ALARM: " +
+                "night wakeups no longer move the time (going to bed at midnight " +
+                "won't risk a 13-hour sleep); it's unaffected by battery saver " +
+                "(rings even at 1%). HERALD: a quick glance or a notification no " +
+                "longer counts as waking up (it takes 10 minutes of real use); a " +
+                "daytime fast is no longer mistaken for sleep; it now also uses " +
+                "your system alarm to know when you wake. CONDUCT: all penalties " +
+                "removed (spells, interrupted freezes): the rating depends ONLY " +
+                "on time spent on the phone. The CASTELLAN's helm is cropped and " +
+                "the same size as the others. And I prepared, in docs/, the logic " +
+                "of guardians, teams, freeze, herald, alarm, sleep and conduct.",
+        ),
+        NewsItem(
             "3.16.0",
             "Sveglia davvero intelligente, condotta sistemata e mille correzioni",
             "Truly smart alarm, fixed conduct and a thousand fixes",

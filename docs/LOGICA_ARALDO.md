@@ -22,7 +22,27 @@ L'app osserva le transizioni dello schermo FISICO (`trackScreenForAraldo`):
   - la riaccensione = il tuo **risveglio**.
 - La **nanna abituale** è la **mediana** degli ultimi orari di addormentamento
   (servono almeno 3 notti). Finché non c'è abbastanza storico, l'Araldo usa gli
-  orari **indicativi** che hai messo nel profilo all'inizio.
+  orari **indicativi** del profilo e/o la tua **sveglia di sistema** (vedi sotto).
+
+### Un'occhiata breve NON ti sveglia (3, 3.3)
+Una notifica o uno sguardo veloce (per vedere l'ora, un messaggio, o per la
+pipì notturna) **non** azzera il conteggio del sonno. Il risveglio è considerato
+vero solo se lo schermo resta acceso per almeno **10 minuti**
+(`ARALDO_BRIEF_WAKE_MS`); sotto quella soglia la dormita continua. Così un
+messaggio in piena notte non "resetta le 4 ore".
+
+### Un digiuno diurno NON è una dormita (3.1)
+Se stai 4 ore senza toccare il telefono ma sei sveglio (studio, passeggiata…),
+NON viene contato come sonno: la nanna deve **iniziare in orario notturno**
+(finestra 21:00–05:00). Nota: il telefono da solo non "sa" se sei sveglio; con
+uno smartwatch o i passi (Health Connect) si potrebbe capire meglio — è un
+possibile miglioramento futuro, oggi ci affidiamo alla finestra notturna.
+
+### La tua sveglia di sistema (3.2)
+Sì, l'app **può leggere la prossima sveglia** che hai impostato
+(`AlarmManager.getNextAlarmClock`, senza permessi speciali). L'Araldo la usa per
+stimare l'ora del risveglio quando non ha ancora rilevato una dormita: se hai la
+sveglia alle 07:00, sa che il blocco mattutino ha senso da lì.
 
 ## Le due fasi (le attivi tu quando crei l'Araldo)
 

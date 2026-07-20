@@ -79,6 +79,9 @@ class MonitorService : Service() {
         private const val LOCATION_EVERY_MS = 45_000L
         // Araldo: uno spegnimento schermo di almeno 4 ore consecutive = una dormita.
         private const val WAKE_GAP_MS = 4L * 3600_000L
+        // Un risveglio è VERO solo se lo schermo resta acceso almeno così a
+        // lungo: sotto è un'occhiata (notifica, ora, pipì notturna) — 3, 3.3.
+        private const val ARALDO_BRIEF_WAKE_MS = 10L * 60_000L
         private const val KEY_STATE = "usage_state"
         private const val KEY_WEEKLY_PENDING = "weekly_report_pending"
 
@@ -117,6 +120,9 @@ class MonitorService : Service() {
     private val blockedToday = mutableSetOf<String>()
     // Ultimo giorno (ISO) segnato come "con guardiani" per i traguardi (7.1).
     private var lastGuardedMark: String = ""
+    // Quando è ripreso l'uso dello schermo durante una possibile dormita: serve
+    // a distinguere un vero risveglio da un'occhiata breve (Araldo, 3/3.3).
+    private var araldoWakeOnSince: Long = 0L
     // Cache dell'uso REALE per-app di OGGI (dal sistema): il Guardiano
     // giornaliero la usa per contare in modo robusto, anche se la squadra è
     // stata spenta e riaccesa o il servizio si è fermato un po' (11).
@@ -337,8 +343,14 @@ class MonitorService : Service() {
         // Risparmio batteria: sotto la soglia scelta i motori si SPENGONO del
         // tutto (ticker fermo, blocchi rimossi, zero CPU). La sveglia arriva
         // dagli eventi di sistema quando la carica risale o si va in carica.
+        // ECCEZIONE (2.3): se la sveglia intelligente è ARMATA e non ha ancora
+        // agganciato un orario, il ticker resta acceso a rilevare il sonno —
+        // la sveglia non deve mai essere fermata dal risparmio energetico.
+        SmartAlarmRepository.load(this)
+        val smartWatching = SmartAlarmRepository.isArmed() &&
+            SmartAlarmRepository.alarmAt.value <= 0L
         updateBatteryPause(now)
-        if (batteryPaused) {
+        if (batteryPaused && !smartWatching) {
             enterDeepSleep()
             return
         }
@@ -696,10 +708,18 @@ class MonitorService : Service() {
                         // così l'Araldo protegge fin dal primo giorno.
                         var wakeAt = AraldoData.wakeAt.value
                         if (wakeAt == 0L) {
-                            val usual = ProfileRepository.usualWakeMinute.value
-                            if (usual >= 0) {
-                                val t = todayAtMinute(usual)
-                                if (now >= t) wakeAt = t
+                            // Prima scelta senza dormita rilevata: la SVEGLIA di
+                            // sistema (3.2). Se non c'è, l'orario indicativo del
+                            // profilo. Così l'Araldo sa quando ti alzi davvero.
+                            val sysAlarm = systemAlarmWakeToday(now)
+                            if (sysAlarm != 0L) {
+                                wakeAt = sysAlarm
+                            } else {
+                                val usual = ProfileRepository.usualWakeMinute.value
+                                if (usual >= 0) {
+                                    val t = todayAtMinute(usual)
+                                    if (now >= t) wakeAt = t
+                                }
                             }
                         }
                         val morningActive = timer.araldoMorning && wakeAt != 0L &&
@@ -1052,22 +1072,70 @@ class MonitorService : Service() {
     // ---------------------------------------------------------------- Araldo
 
     /**
-     * Osserva le transizioni dello schermo: quando finisce uno spegnimento di
-     * almeno 4 ore, l'inizio era la NANNA e la fine è il RISVEGLIO di oggi.
-     * L'inizio dello spegnimento vive nelle prefs, così sopravvive ai riavvii.
+     * Osserva le transizioni dello schermo per capire nanna e risveglio.
+     *
+     * Due accortezze richieste dall'utente:
+     *  - Un'OCCHIATA breve (notifica, sguardo all'ora, pipì notturna) NON conta
+     *    come risveglio: lo schermo deve restare acceso per almeno
+     *    [ARALDO_BRIEF_WAKE_MS] perché il sonno sia considerato finito (3, 3.3).
+     *  - Un digiuno diurno (4h senza telefono ma svegli, es. studio) NON è una
+     *    dormita: la nanna deve iniziare in una finestra NOTTURNA (3.1).
      */
     private fun trackScreenForAraldo(interactive: Boolean, now: Long) {
         val offSince = AraldoData.screenOffSince(this)
         if (!interactive) {
+            // Schermo spento: se non stavamo già "dormendo", inizia ora. Un
+            // eventuale breve risveglio si chiude senza contare nulla.
             if (offSince == 0L) AraldoData.setScreenOffSince(this, now)
+            araldoWakeOnSince = 0L
             return
         }
-        if (offSince == 0L) return
-        AraldoData.setScreenOffSince(this, 0L)
-        if (now - offSince >= WAKE_GAP_MS) {
-            AraldoData.recordBedtime(this, offSince)
-            AraldoData.recordWake(this, now)
+        // Schermo acceso.
+        if (offSince == 0L) {
+            araldoWakeOnSince = 0L
+            return
         }
+        // Stavamo dormendo. Confermiamo il risveglio SOLO se lo schermo resta
+        // acceso abbastanza: prima è una semplice occhiata e il sonno continua.
+        if (araldoWakeOnSince == 0L) araldoWakeOnSince = now
+        if (now - araldoWakeOnSince < ARALDO_BRIEF_WAKE_MS) return
+
+        val wakeAt = araldoWakeOnSince
+        AraldoData.setScreenOffSince(this, 0L)
+        araldoWakeOnSince = 0L
+        // Dormita valida: durata ≥ 4h E nanna iniziata in orario notturno.
+        if (wakeAt - offSince >= WAKE_GAP_MS && startedAtNight(offSince)) {
+            AraldoData.recordBedtime(this, offSince)
+            AraldoData.recordWake(this, wakeAt)
+        }
+    }
+
+    /**
+     * La SVEGLIA di sistema dell'utente riportata a OGGI (3.2): usa l'ora della
+     * prossima sveglia impostata (`getNextAlarmClock`) e la proietta su oggi. Se
+     * quell'ora è già passata oggi, la ritorna come "orario di risveglio"
+     * stimato; altrimenti 0. Non richiede permessi speciali.
+     */
+    private fun systemAlarmWakeToday(now: Long): Long {
+        return try {
+            val am = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            val next = am.nextAlarmClock ?: return 0L
+            val z = java.time.ZoneId.systemDefault()
+            val alarmTime = java.time.Instant.ofEpochMilli(next.triggerTime).atZone(z).toLocalTime()
+            val todayAt = LocalDate.now().atTime(alarmTime).atZone(z).toInstant().toEpochMilli()
+            if (now >= todayAt) todayAt else 0L
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    /** True se [epochMs] cade nella finestra notturna 21:00–05:00 (una nanna vera). */
+    private fun startedAtNight(epochMs: Long): Boolean {
+        val minute = java.time.Instant.ofEpochMilli(epochMs)
+            .atZone(java.time.ZoneId.systemDefault())
+            .let { it.hour * 60 + it.minute }
+        // 21:00 (1260) → 05:00 (300), a cavallo della mezzanotte.
+        return minute >= 21 * 60 || minute <= 5 * 60
     }
 
     /**

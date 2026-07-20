@@ -115,8 +115,11 @@ object SmartAlarmRepository {
         val p = prefs(context)
         // Solo per addormentamenti iniziati DOPO l'attivazione.
         if (sleepStart < p.getLong(KEY_ARMED_AT, 0L)) return
-        // Stesso sonno già gestito: non toccare nulla.
-        if (p.getLong(KEY_SLEEP_START, 0L) == sleepStart) return
+        // UNA SOLA VOLTA per notte (2.1): il primo addormentamento fissa
+        // l'orario e NON si tocca più. I risvegli notturni (pipì, sguardo
+        // all'ora) NON spostano la sveglia: altrimenti chi va a letto a
+        // mezzanotte e si alza alle 4 rischierebbe di dormire 13 ore.
+        if (p.getLong(KEY_SLEEP_START, 0L) != 0L) return
         val wakeAt = sleepStart + _cycles.value * CYCLE_MS
         // Se ci sono giorni di ripetizione, sveglia solo se il RISVEGLIO cade in
         // uno di quelli (i giorni si riferiscono al giorno del risveglio).

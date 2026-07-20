@@ -65,8 +65,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import androidx.compose.ui.unit.toSize
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -251,9 +254,9 @@ private fun SmartAlarmCard() {
                     Text(tr("Disattiva la sveglia", "Turn off the alarm"))
                 }
             } else {
-                // Scelta dei CICLI con pulsanti tondi facili da toccare (12):
-                // niente più slider che si scontra con lo scorrimento.
-                CyclePicker(
+                // Slider a mezzaluna col pallino GRANDE e facile da prendere;
+                // in più tocchi direttamente il punto che vuoi (sonno 1).
+                CrescentSlider(
                     cycles = cycles,
                     onChange = { SmartAlarmRepository.setCycles(context, it) },
                 )
@@ -287,47 +290,105 @@ private fun SmartAlarmCard() {
 }
 
 /**
- * Scelta dei cicli di sonno con pulsanti tondi 3..7 (facili da toccare, non
- * si scontrano con lo scorrimento della pagina, 12). Sotto, luna e ore.
+ * Slider a MEZZALUNA per i cicli (3..7). Il pallino è GRANDE e si può anche
+ * toccare direttamente il punto dell'arco che si vuole: così è facile da
+ * "prendere" (sonno 1). Al centro luna, cicli e ore.
  */
 @Composable
-private fun CyclePicker(cycles: Int, onChange: (Int) -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            (3..7).forEach { n ->
-                val on = n == cycles
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .aspectRatio(1f)
-                        .background(
-                            if (on) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            androidx.compose.foundation.shape.CircleShape,
-                        )
-                        .clickable { onChange(n) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "$n",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = if (on) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+private fun CrescentSlider(cycles: Int, onChange: (Int) -> Unit) {
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    val activeColor = MaterialTheme.colorScheme.primary
+    val frac = (cycles - 3) / 4f
+
+    // Converte un tocco/trascinamento (sulla metà superiore) in numero di cicli.
+    fun cyclesFrom(pos: Offset, size: androidx.compose.ui.geometry.Size): Int? {
+        val cx = size.width / 2f
+        val cy = size.height
+        val deg = Math.toDegrees(atan2((pos.y - cy).toDouble(), (pos.x - cx).toDouble()))
+        if (deg !in -180.0..0.0) return null
+        val f = ((deg + 180.0) / 180.0).toFloat()
+        return 3 + (f * 4f).roundToInt().coerceIn(0, 4)
+    }
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(170.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                // Trascinamento: consuma il gesto così NON fa scorrere la pagina.
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { cyclesFrom(it, size.toSize())?.let(onChange) },
+                    ) { change, _ ->
+                        change.consume()
+                        cyclesFrom(change.position, size.toSize())?.let(onChange)
+                    }
                 }
+                // Tocco secco: imposta subito il valore del punto toccato.
+                .pointerInput(Unit) {
+                    detectTapGestures { p -> cyclesFrom(p, size.toSize())?.let(onChange) }
+                },
+        ) {
+            val cx = size.width / 2f
+            val cy = size.height
+            val radius = minOf(size.width / 2f, size.height) - 34f
+            val rect = androidx.compose.ui.geometry.Rect(
+                cx - radius, cy - radius, cx + radius, cy + radius,
+            )
+            // Binario spesso della mezzaluna.
+            drawArc(
+                color = track, startAngle = 180f, sweepAngle = 180f, useCenter = false,
+                topLeft = rect.topLeft, size = rect.size,
+                style = Stroke(width = 34f, cap = StrokeCap.Round),
+            )
+            drawArc(
+                color = activeColor, startAngle = 180f, sweepAngle = 180f * frac,
+                useCenter = false, topLeft = rect.topLeft, size = rect.size,
+                style = Stroke(width = 34f, cap = StrokeCap.Round),
+            )
+            // Tacche dei 5 valori (3..7 cicli).
+            for (i in 0..4) {
+                val a = Math.toRadians(180.0 + i * 45.0)
+                val tx = cx + (radius * cos(a)).toFloat()
+                val ty = cy + (radius * sin(a)).toFloat()
+                drawCircle(
+                    color = if (i <= (cycles - 3)) activeColor else track,
+                    radius = 6f, center = Offset(tx, ty),
+                )
             }
+            // Il POMELLO grosso e ben visibile (sonno 1: facile da prendere).
+            val ka = Math.toRadians(180.0 + frac * 180.0)
+            val kx = cx + (radius * cos(ka)).toFloat()
+            val ky = cy + (radius * sin(ka)).toFloat()
+            drawCircle(androidx.compose.ui.graphics.Color.White, radius = 30f, center = Offset(kx, ky))
+            drawCircle(activeColor, radius = 22f, center = Offset(kx, ky))
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            tr("🌙 $cycles cicli", "🌙 $cycles cycles") +
-                " ≈ " + formatMs(cycles * SmartAlarmRepository.CYCLE_MS),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(bottom = 6.dp),
+        ) {
+            Icon(
+                Icons.Default.Bedtime,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(26.dp),
+            )
+            Text(
+                tr("$cycles cicli", "$cycles cycles"),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "≈ " + formatMs(cycles * SmartAlarmRepository.CYCLE_MS) +
+                    tr(" di sonno", " of sleep"),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

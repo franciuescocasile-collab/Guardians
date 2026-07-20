@@ -37,10 +37,9 @@ object ConductRepository {
     // Aumenta questo numero quando i coefficienti cambiano abbastanza da voler
     // ripartire con una condotta pulita (evita che vecchi valori "sporchi" da
     // test restino incollati al rosso col motore nuovo, più indulgente).
-    // v4: corretto il bug del malus risottratto ogni giorno (la condotta
-    // crollava per 10 giorni dopo una sola interruzione di congelamento).
-    // Bump = la condotta riparte pulita col motore corretto.
-    private const val CURRENT_CALIBRATION = 4
+    // v5: rimossi del tutto i malus (incantesimi e congelamenti interrotti).
+    // La Condotta dipende SOLO dal tempo speso. Bump = riparte pulita.
+    private const val CURRENT_CALIBRATION = 5
 
     /** Valore interno 0..100 (100 = massimo verde). Mai mostrato come numero. */
     private val _conduct = MutableStateFlow(ConductConfig.START_VALUE)
@@ -119,7 +118,9 @@ object ConductRepository {
         todayPerMacro: Map<MacroCategory, Long>,
         bigFreezeMs: Long,
     ): Long {
-        if (!hasBaseline()) return (bigFreezeMs * ConductConfig.FREEZE_SAVED_FACTOR).toLong()
+        // Nessun bonus dai congelamenti (4.2): il tempo risparmiato guarda solo
+        // quanto hai usato in meno rispetto alla baseline, categoria per categoria.
+        if (!hasBaseline()) return 0L
         var saved = 0.0
         for (macro in MacroCategory.entries) {
             val base = shadow[macro] ?: 0L
@@ -127,9 +128,7 @@ object ConductRepository {
             val delta = (base - now).toDouble()            // può essere negativo
             saved += delta * ConductConfig.weightOf(macro)
         }
-        saved = saved.coerceAtLeast(0.0)                   // pavimento a 0
-        saved += bigFreezeMs * ConductConfig.FREEZE_SAVED_FACTOR
-        return saved.toLong().coerceAtLeast(0L)
+        return saved.coerceAtLeast(0.0).toLong()           // pavimento a 0
     }
 
     // =====================================================================
@@ -244,12 +243,7 @@ object ConductRepository {
             value = startValue - ConductConfig.MAX_DAILY_DRAIN
         }
 
-        // NB: i malus NON si risottraggono qui. Vengono già applicati UNA volta
-        // in addMalus, al momento dell'evento. Prima invece venivano tolti di
-        // nuovo a ogni rollover per tutta la finestra mobile (10 giorni): una
-        // sola interruzione di congelamento faceva crollare la condotta per
-        // giorni. Qui ci limitiamo a POTARE gli eventi scaduti.
-        pruneExpiredMalus(context, LocalDate.parse(date))
+        // Nessun malus: la Condotta valuta solo il tempo speso (4.2).
 
         // Recupero passivo nei giorni puliti.
         if (clean && overTox == 0L) value += ConductConfig.DAILY_RECOVERY
@@ -314,54 +308,18 @@ object ConductRepository {
     }
 
     // =====================================================================
-    //  MALUS (incantesimi e Grandi Congelamenti interrotti)
+    //  MALUS — RIMOSSI (4, 4.1, 4.2)
     // =====================================================================
-    /** Incantesimo (Bypass): infrazione critica immediata, malus secco. */
-    fun registerSpellMalus(context: Context) {
-        addMalus(context, ConductConfig.SPELL_MALUS)
-    }
+    // La Condotta ora dipende SOLO dal tempo speso al telefono: niente più
+    // malus per gli incantesimi (che non esistono più) né per l'interruzione
+    // di un congelamento. Le funzioni restano come no-op per non rompere i
+    // chiamanti esistenti, ma non toccano più la Condotta.
+    @Deprecated("La Condotta non usa più i malus: valuta solo il tempo speso.")
+    fun registerSpellMalus(context: Context) { /* no-op */ }
 
-    /**
-     * Interruzione di un Grande Congelamento: penale PROPORZIONALE ai minuti
-     * rimasti. Malus Effettivo = Malus Massimo × (Rimanenti / Totali).
-     * I congelamenti sotto la soglia [ConductConfig.BIG_FREEZE_MIN_MS] non pesano.
-     */
+    @Deprecated("La Condotta non usa più i malus: valuta solo il tempo speso.")
     fun registerFreezeInterruption(context: Context, remainingMs: Long, totalMs: Long) {
-        if (totalMs < ConductConfig.BIG_FREEZE_MIN_MS) return
-        val frac = (remainingMs.toDouble() / totalMs.toDouble()).coerceIn(0.0, 1.0)
-        addMalus(context, ConductConfig.BIG_FREEZE_MAX_MALUS * frac)
-    }
-
-    private fun addMalus(context: Context, amount: Double) {
-        load(context)
-        // Applichiamo subito una parte al valore vivo (effetto immediato sul
-        // cursore) e registriamo l'evento per la finestra mobile.
-        _conduct.value = (_conduct.value - amount).coerceIn(0.0, 100.0)
-        val arr = readMalus(context)
-        arr.put(JSONObject().apply {
-            put("date", LocalDate.now().toString())
-            put("amount", amount)
-        })
-        prefs(context).edit()
-            .putString(KEY_MALUS, arr.toString())
-            .putFloat(KEY_CONDUCT, _conduct.value.toFloat())
-            .apply()
-    }
-
-    /** Rimuove gli eventi-malus usciti dalla finestra mobile (senza sottrarre). */
-    private fun pruneExpiredMalus(context: Context, refDate: LocalDate) {
-        val arr = readMalus(context)
-        val kept = JSONArray()
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val d = try { LocalDate.parse(o.getString("date")) } catch (_: Exception) { null }
-            if (d != null &&
-                java.time.temporal.ChronoUnit.DAYS.between(d, refDate) < ConductConfig.MALUS_WINDOW_DAYS
-            ) {
-                kept.put(o)
-            }
-        }
-        prefs(context).edit().putString(KEY_MALUS, kept.toString()).apply()
+        /* no-op */
     }
 
     private fun readMalus(context: Context): JSONArray =

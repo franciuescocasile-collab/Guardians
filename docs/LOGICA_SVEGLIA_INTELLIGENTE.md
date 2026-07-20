@@ -31,8 +31,11 @@ Un ciclo di sonno dura circa **90 minuti** (`CYCLE_MS`). Consigliati:
 4. Alla fine dei cicli suona — anche a schermo bloccato — con lo **spegni** a
    pressione prolungata.
 
-Se ti alzi nel cuore della notte e poi ti riaddormenti, il conteggio riparte dal
-nuovo addormentamento (ti sveglia dopo cicli **interi** dal sonno vero).
+**I risvegli notturni NON spostano la sveglia** (2.1): l'orario viene fissato al
+PRIMO addormentamento della notte e non cambia più. Se ti alzi alle 4 per la
+pipì e ti riaddormenti, la sveglia resta all'orario calcolato quando sei andato
+a letto — così chi va a letto a mezzanotte con 6 cicli si sveglia verso le 9, non
+alle 13.
 
 ## Ripetizione per giorni (opzionale)
 - **Vuoto** = una volta sola (dopo che suona, si disarma).
@@ -52,14 +55,26 @@ Perché funzioni bene:
 - se stai col telefono acceso a letto, il conteggio parte solo da quando lo
   posi e resta spento ~20 minuti.
 
-Se hai la batteria molto bassa e NON sei in carica, il risparmio energetico
-aggressivo del telefono può fermare il rilevamento: in quel caso conviene
-mettere il telefono in carica prima di dormire.
+**La sveglia NON è influenzata dal risparmio energetico** (2.3): usa
+`setAlarmClock`, l'API delle sveglie vere, che suona anche in Doze e a batteria
+bassissima. In più, finché la sveglia è "armata" e non ha ancora agganciato
+l'orario, il rilevamento del sonno resta acceso **anche** sotto la soglia di
+risparmio batteria di Guardians, così non perde il momento in cui ti addormenti.
 
-## Le manopole che puoi cambiare in `SmartAlarmRepository.kt`
+## Smartwatch (2.2) — è possibile?
+Al momento **no, non in modo affidabile**. Health Connect (il magazzino dati di
+salute di Android) fornisce le dormite **a posteriori**, non "in diretta" mentre
+ti addormenti, quindi non può innescare la sveglia in tempo reale. Servirebbe una
+app companion sul watch (Wear OS) che rilevi il sonno e avvisi il telefono: è un
+progetto a parte. Per ora vale la regola dei 20 minuti di schermo spento. Se in
+futuro colleghi un watch che espone il sonno in tempo reale, si può aggiungere.
+
+## Le manopole (2.4) — chi le può cambiare?
+Sono costanti **nel codice** (`SmartAlarmRepository.kt`): le cambio **io/tu come
+sviluppatori** ricompilando l'app; **non** sono impostazioni per l'utente finale.
+Se vuoi renderne qualcuna regolabile dall'utente (es. la soglia dei 20 minuti),
+dimmelo e la porto nelle Impostazioni dell'app.
 - `CYCLE_MS` (90 min) — durata di un ciclo.
 - `SLEEP_ONSET_MS` (20 min) — quanto schermo spento serve per dire "si è
-  addormentato". Più alto = più prudente (meno falsi allarmi da telefono
-  posato); più basso = parte prima.
-- `FALL_ASLEEP_MS` (15 min) — margine per addormentarsi (usato solo nel calcolo
-  di anteprima, non nella modalità intelligente vera).
+  addormentato". Più alto = più prudente; più basso = parte prima.
+- `FALL_ASLEEP_MS` (15 min) — margine di addormentamento (solo per l'anteprima).
