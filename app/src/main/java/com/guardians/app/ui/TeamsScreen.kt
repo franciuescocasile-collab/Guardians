@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -188,6 +191,13 @@ fun TeamsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // ------------------------------------------------ PAUSA dei guardiani
+        // Due pulsanti: a sinistra la pausa PERSONALIZZATA (chiede quanto), a
+        // destra quella PREIMPOSTATA (long-press per cambiarla). Durante la
+        // pausa i pulsanti lasciano il posto a un banner col conto alla
+        // rovescia; allo scadere tutto si riattiva da solo.
+        PauseControls()
 
         if (teams.isEmpty()) {
             Text(
@@ -512,6 +522,177 @@ fun WeekDaysStrip(days: Set<Int>) {
                 color = if (on) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
             )
+        }
+    }
+}
+
+/**
+ * I controlli della PAUSA (sostituiscono gli incantesimi): due pulsanti —
+ * personalizzata a sinistra, preimpostata a destra (long-press per cambiarla;
+ * la prima volta chiede subito i minuti). In pausa, un banner col countdown.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PauseControls() {
+    val context = LocalContext.current
+    com.guardians.app.data.PauseRepository.load(context)
+    val pauseUntil by com.guardians.app.data.PauseRepository.pauseUntil.collectAsState()
+    val preset by com.guardians.app.data.PauseRepository.presetMinutes.collectAsState()
+
+    // Ticker locale per il conto alla rovescia del banner.
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(pauseUntil) {
+        while (System.currentTimeMillis() < pauseUntil) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000L)
+        }
+        now = System.currentTimeMillis()
+    }
+    val paused = now < pauseUntil
+
+    // Dialogo dei minuti: per la pausa personalizzata o per cambiare il preset.
+    // mode: "custom" = avvia subito; "preset" = salva soltanto il preset;
+    // "presetAndStart" = primo uso del pulsante destro (salva e avvia).
+    var askMinutes by remember { mutableStateOf<String?>(null) }
+    askMinutes?.let { mode ->
+        var text by remember(mode) { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { askMinutes = null },
+            title = {
+                Text(
+                    if (mode == "preset") tr("Pausa preimpostata", "Preset pause")
+                    else tr("Quanto vuoi fare la pausa?", "How long should the pause be?")
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        tr(
+                            "Minuti di pausa (massimo 12 ore = 720). I guardiani " +
+                                "si riattiveranno da soli allo scadere.",
+                            "Pause minutes (max 12 hours = 720). Guardians will " +
+                                "re-arm on their own when it ends.",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { v -> text = v.filter { it.isDigit() } },
+                        label = { Text(tr("Minuti", "Minutes")) },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        ),
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                val v = text.toIntOrNull() ?: 0
+                TextButton(
+                    enabled = v in 1..com.guardians.app.data.PauseRepository.MAX_MINUTES,
+                    onClick = {
+                        when (mode) {
+                            "custom" -> com.guardians.app.data.PauseRepository
+                                .startPause(context, v)
+                            "preset" -> com.guardians.app.data.PauseRepository
+                                .setPreset(context, v)
+                            else -> {   // presetAndStart: primo uso del destro
+                                com.guardians.app.data.PauseRepository.setPreset(context, v)
+                                com.guardians.app.data.PauseRepository.startPause(context, v)
+                            }
+                        }
+                        askMinutes = null
+                    },
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { askMinutes = null }) { Text(tr("Annulla", "Cancel")) }
+            },
+        )
+    }
+
+    if (paused) {
+        // Banner del conto alla rovescia al posto dei pulsanti.
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            ),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+            ) {
+                Icon(
+                    Icons.Default.Pause,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Pausa attiva: ", "Pause active: ") +
+                            com.guardians.app.model.formatMsPrecise(
+                                (pauseUntil - now).coerceAtLeast(1000L),
+                            ),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        tr(
+                            "Allo scadere i guardiani si riattivano da soli.",
+                            "When it ends, guardians re-arm on their own.",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = { com.guardians.app.data.PauseRepository.endPause(context) },
+                ) { Text(tr("Termina", "End")) }
+            }
+        }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // SINISTRA: pausa personalizzata (chiede i minuti ogni volta).
+            OutlinedButton(
+                onClick = { askMinutes = "custom" },
+                modifier = Modifier.weight(1f).height(46.dp),
+            ) {
+                Text(tr("Pausa…", "Pause…"), fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            // DESTRA: pausa preimpostata; long-press per cambiarla. La prima
+            // volta (preset = 0) chiede subito i minuti.
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(46.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .combinedClickable(
+                        onClick = {
+                            if (preset > 0) {
+                                com.guardians.app.data.PauseRepository
+                                    .startPause(context, preset)
+                            } else {
+                                askMinutes = "presetAndStart"
+                            }
+                        },
+                        onLongClick = { askMinutes = "preset" },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (preset > 0) {
+                        tr("Pausa ", "Pause ") + formatMs(preset * 60_000L)
+                    } else {
+                        tr("Pausa rapida", "Quick pause")
+                    },
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

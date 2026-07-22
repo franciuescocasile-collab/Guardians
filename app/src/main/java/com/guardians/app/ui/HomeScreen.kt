@@ -86,10 +86,9 @@ fun HomeScreen(
     val waitReadyAt by SealRepository.waitReadyAt.collectAsState()
     val sealed = !SealRepository.canEditNow()
 
-    // Azioni sulla squadra aperta (incantesimo / eliminazione), con conferma.
+    // Azioni sulla squadra aperta (eliminazione), con conferma.
     val realTeam = teamFilter?.takeIf { it != ALL_TEAMS_FILTER }
     var deleteTarget by remember { mutableStateOf<String?>(null) }
-    var shadowTarget by remember { mutableStateOf<String?>(null) }
     deleteTarget?.let { team ->
         ConfirmDeleteTeamDialog(
             team = team,
@@ -98,11 +97,9 @@ fun HomeScreen(
             onDeleted = onBack,
         )
     }
-    shadowTarget?.let { team ->
-        ConfirmShadowTeamDialog(team = team, sealed = sealed, onDismiss = { shadowTarget = null })
-    }
 
-    // Spegnimento squadra: mai al volo — si sceglie tra disattivare o Ombra.
+    // Spegnimento squadra: conferma semplice. Per una sosta temporanea c'è la
+    // PAUSA (pulsanti nella pagina Squadre), che si riattiva da sola.
     var deactivateChoice by remember { mutableStateOf(false) }
     if (deactivateChoice && realTeam != null) {
         val members = timers.filter { it.teamName == realTeam }
@@ -112,12 +109,12 @@ fun HomeScreen(
             text = {
                 Text(
                     tr(
-                        "Vuoi DISATTIVARE la squadra (resta spenta finché non la " +
-                            "riaccendi) o preferisci lanciare un'OMBRA temporanea " +
-                            "(i guardiani tornano da soli allo scadere)?",
-                        "Do you want to TURN OFF the team (stays off until you " +
-                            "re-enable it) or cast a temporary SHADOW instead " +
-                            "(guardians come back on their own)?",
+                        "La squadra resterà SPENTA finché non la riaccendi. Se ti " +
+                            "serve solo una sosta, usa la PAUSA nella pagina " +
+                            "Squadre: si riattiva da sola allo scadere.",
+                        "The team will stay OFF until you re-enable it. If you " +
+                            "just need a break, use the PAUSE in the Teams page: " +
+                            "it re-arms on its own.",
                     )
                 )
             },
@@ -130,14 +127,8 @@ fun HomeScreen(
                 }
             },
             dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        deactivateChoice = false
-                        shadowTarget = realTeam
-                    }) { Text(tr("Lancia Ombra", "Cast Shadow")) }
-                    TextButton(onClick = { deactivateChoice = false }) {
-                        Text(tr("Annulla", "Cancel"))
-                    }
+                TextButton(onClick = { deactivateChoice = false }) {
+                    Text(tr("Annulla", "Cancel"))
                 }
             },
         )
@@ -263,20 +254,6 @@ fun HomeScreen(
                                 expanded = menuOpen,
                                 onDismissRequest = { menuOpen = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(tr("Lancia Incantesimo", "Cast a spell")) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.AutoAwesome,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                        )
-                                    },
-                                    onClick = {
-                                        menuOpen = false
-                                        shadowTarget = realTeam
-                                    },
-                                )
                                 DropdownMenuItem(
                                     text = { Text(tr("Elimina squadra", "Delete team")) },
                                     leadingIcon = {
@@ -579,7 +556,11 @@ private fun TimerCard(
         append(" · ")
         append(timer.teamName)
     }
-    val shadowed = SpellsRepository.isShadowed(timer.teamName)
+    // "Sospeso": in PAUSA globale (i vecchi incantesimi non esistono più).
+    com.guardians.app.data.PauseRepository.load(LocalContext.current)
+    com.guardians.app.data.PauseRepository.pauseUntil.collectAsState().value
+    val shadowed = SpellsRepository.isShadowed(timer.teamName) ||
+        com.guardians.app.data.PauseRepository.isPaused()
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -618,7 +599,7 @@ private fun TimerCard(
                         isBlocked || cooldownRemainingMs > 0L || windowActive
                     Text(
                         when {
-                            shadowed -> tr("Sospeso dall'Incantesimo d'Ombra", "Shadowed")
+                            shadowed -> tr("In pausa (riprende da solo)", "Paused (resumes on its own)")
                             isBlocked -> when {
                                 eff == TimerType.GUARDIANO &&
                                     timer.resetCycle == com.guardians.app.model.ResetCycle.WEEKLY ->

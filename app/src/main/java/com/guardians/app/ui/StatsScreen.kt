@@ -333,7 +333,7 @@ internal fun SleepConnectCard() {
     var granted by remember { mutableStateOf(false) }
     var checking by remember { mutableStateOf(true) }
     var lastSleep by remember {
-        mutableStateOf<androidx.health.connect.client.records.SleepSessionRecord?>(null)
+        mutableStateOf<HealthConnectManager.MergedNight?>(null)
     }
     var nights by remember {
         mutableStateOf<List<HealthConnectManager.WindDownNight>>(emptyList())
@@ -347,7 +347,7 @@ internal fun SleepConnectCard() {
                 granted = HealthConnectManager.hasPermission(context)
                 if (granted) {
                     withContext(Dispatchers.IO) {
-                        lastSleep = HealthConnectManager.lastSleep(context)
+                        lastSleep = HealthConnectManager.lastNight(context)
                         nights = HealthConnectManager.windDownNights(context)
                     }
                 } else {
@@ -460,24 +460,32 @@ internal fun SleepConnectCard() {
                         )
                     } else {
                         val zone = ZoneId.systemDefault()
-                        val mins = java.time.Duration.between(sleep.startTime, sleep.endTime)
-                            .toMinutes().coerceAtLeast(0L)
                         val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-                        val bed = sleep.startTime.atZone(zone).format(fmt)
-                        val wake = sleep.endTime.atZone(zone).format(fmt)
+                        val bed = sleep.start.atZone(zone).format(fmt)
+                        val wake = sleep.end.atZone(zone).format(fmt)
                         Text(
                             tr("Ultima dormita", "Last night's sleep"),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // Sonno EFFETTIVO in grande; sotto, la finestra a letto e
+                        // l'eventuale veglia notturna (notte UNIFICATA, sonno 3).
                         Text(
-                            formatMs(mins * 60_000L),
+                            formatMs(sleep.sleepMin * 60_000L),
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
-                            tr("Dalle ", "From ") + bed + tr(" alle ", " to ") + wake,
+                            tr("Dalle ", "From ") + bed + tr(" alle ", " to ") + wake +
+                                if (sleep.awakeMin > 0L) {
+                                    tr(
+                                        " · ${sleep.awakeMin} min sveglio nel letto",
+                                        " · ${sleep.awakeMin} min awake in bed",
+                                    )
+                                } else {
+                                    ""
+                                },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -953,8 +961,28 @@ private fun WeekChart2(
     // Spazio a SINISTRA per le etichette orarie, così NON coprono le barre
     // (stat 1: "non si vedono bene le ore laterali, fai spazio").
     val leftPadDp = 30.dp
+    // Barra selezionata col tocco → quanto sei stato al telefono quel giorno.
+    var selected by remember(days) { mutableStateOf(-1) }
 
     Column {
+        // Tooltip sopra il grafico: giorno + tempo esatto.
+        Box(Modifier.fillMaxWidth().height(18.dp), contentAlignment = Alignment.Center) {
+            if (selected in days.indices && days[selected].second > 0L) {
+                Text(
+                    "${days[selected].first} · ${formatMs(days[selected].second)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                Text(
+                    tr("tocca una barra per il dettaglio", "tap a bar for details"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(2.dp))
         Box(
             Modifier
                 .fillMaxWidth()
@@ -1039,13 +1067,23 @@ private fun WeekChart2(
                 pts.forEach { drawCircle(dowColor.copy(alpha = 0.55f), radius = 3f, center = it) }
             }
             // Le BARRE colorate, sopra il tratteggio (allineate all'area barre).
+            // Ogni colonna è TOCCABILE: mostra il tempo di quel giorno (stat 1).
             Row(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.fillMaxSize().padding(start = leftPadDp),
             ) {
-                days.forEach { (_, ms) ->
+                days.forEachIndexed { i, (_, ms) ->
                     Box(
-                        Modifier.weight(1f).fillMaxHeight(),
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                interactionSource = remember {
+                                    androidx.compose.foundation.interaction
+                                        .MutableInteractionSource()
+                                },
+                                indication = null,
+                            ) { selected = if (selected == i) -1 else i },
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         if (ms > 0L) {
@@ -1055,7 +1093,11 @@ private fun WeekChart2(
                                     .fillMaxWidth(0.52f)
                                     .fillMaxHeight(frac)
                                     .background(
-                                        barColor,
+                                        if (selected == i) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            barColor
+                                        },
                                         RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp),
                                     )
                             )
@@ -1117,7 +1159,8 @@ private fun LegendLine(
     hatched: Boolean = false,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        androidx.compose.foundation.Canvas(Modifier.size(width = 22.dp, height = 10.dp)) {
+        // Campioncino più PICCOLO (stat 2): 14dp, così non copre la scritta.
+        androidx.compose.foundation.Canvas(Modifier.size(width = 14.dp, height = 10.dp)) {
             if (hatched) {
                 var x = 0f
                 while (x < size.width) {

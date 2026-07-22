@@ -29,6 +29,42 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.18.0",
+            "La Pausa, notti intere e guardiani scattanti",
+            "The Pause, whole nights and snappy guardians",
+            "SQUADRE: arrivano i due pulsanti PAUSA (via gli incantesimi per " +
+                "sempre): a sinistra scegli quanto, a destra la preimpostata " +
+                "(tienila premuta per cambiarla). Durante la pausa un banner col " +
+                "conto alla rovescia; allo scadere tutto si riattiva DA SOLO " +
+                "(max 12 ore). E i conteggi continuano a correre. SONNO: le " +
+                "notti spezzate ora sono UNA notte — se dormi 00-04, ti svegli " +
+                "mezz'ora e ridormi fino alle 8, l'app conta dall'inizio e " +
+                "distingue sonno effettivo e tempo a letto; la mezzaluna è " +
+                "fluida e resta visibile anche a sveglia attiva. GUARDIANI: " +
+                "quando li riattivi entrano in azione SUBITO; nuova notifica " +
+                "\"ogni X di uso\" (es. ogni 15 min); i livelli del Messaggero " +
+                "sono documentati con la formula. CONGELAMENTO: notifica fissa " +
+                "col countdown, visibile senza sbloccare. STATISTICHE: sfondo " +
+                "FINALMENTE allineato alle barre (era un errore px/dp), tocca " +
+                "una barra anche nel grafico della home, legenda più pulita. " +
+                "Selettore app: le selezionate stanno in cima. Nuovi documenti: " +
+                "Profilo, Statistiche, Dati e risparmio energetico.",
+            "TEAMS: the two PAUSE buttons arrive (spells gone for good): left " +
+                "asks how long, right applies the preset (long-press to change " +
+                "it). During the pause, a countdown banner; when it ends " +
+                "everything re-arms ON ITS OWN (max 12 hours). Counters keep " +
+                "running. SLEEP: broken nights are now ONE night — sleep 00-04, " +
+                "wake half an hour, sleep till 8: the app counts from the start " +
+                "and tells actual sleep from time in bed; the crescent is fluid " +
+                "and stays visible while the alarm is active. GUARDIANS: they " +
+                "act IMMEDIATELY when re-enabled; new \"every X of use\" " +
+                "notification; Messenger levels documented with the formula. " +
+                "FREEZE: pinned countdown notification. STATS: background " +
+                "FINALLY aligned with the bars (it was a px/dp bug), tap a bar " +
+                "in the home chart too, cleaner legend. App picker: selected " +
+                "apps on top. New docs: Profile, Statistics, Data & battery.",
+        ),
+        NewsItem(
             "3.17.0",
             "Sonno più sveglio, condotta solo sul tempo, elmo del Castellano",
             "Smarter sleep, conduct on time only, Castellan's helm",

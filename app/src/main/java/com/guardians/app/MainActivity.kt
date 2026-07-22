@@ -52,7 +52,6 @@ import com.guardians.app.ui.TravelScreen
 import com.guardians.app.ui.UserProfileScreen
 import com.guardians.app.ui.SettingsScreen
 import com.guardians.app.ui.SigilloScreen
-import com.guardians.app.ui.SpellsScreen
 import com.guardians.app.ui.StatsScreen
 import com.guardians.app.ui.TeamsScreen
 import com.guardians.app.ui.theme.GuardiansTheme
@@ -113,7 +112,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Screen {
-    HUB, TEAMS, TIMERS, EDIT, PICKER, EXCLUSIONS, SETTINGS, STATS, SIGILLO, PROFILE, SPELLS,
+    HUB, TEAMS, TIMERS, EDIT, PICKER, EXCLUSIONS, SETTINGS, STATS, SIGILLO, PROFILE,
     GUIDES, NEWS, USER_PROFILE, FREEZE, NOTIFIER, TRAVEL, NOTIFICATIONS, BATTERY,
     PERSONALIZATION, ADVANCED, SLEEP,
 }
@@ -146,6 +145,9 @@ data class TimerDraft(
     val warnUnit: TimeUnit,
     /** Preavvisi AGGIUNTIVI in millisecondi (aggiunti col "+"). */
     val extraWarnsMs: List<Long> = emptyList(),
+    /** Notifica periodica "ogni X di uso" (vuoto = spenta). */
+    val notifyEveryValue: String = "",
+    val notifyEveryUnit: TimeUnit = TimeUnit.MINUTES,
     /** Squadra (vuota = Squadra Generale). */
     val team: String,
     /** Araldo: fase mattutina (dal risveglio) e serale (prima della nanna). */
@@ -231,6 +233,9 @@ data class TimerDraft(
             warnValue = if (timer.warnAmount > 0) timer.warnAmount.toString() else "",
             warnUnit = timer.warnUnit,
             extraWarnsMs = timer.extraWarnsMs,
+            notifyEveryValue =
+                if (timer.notifyEveryAmount > 0) timer.notifyEveryAmount.toString() else "",
+            notifyEveryUnit = timer.notifyEveryUnit,
             team = timer.team,
             araldoMorning = timer.araldoMorning,
             araldoEvening = timer.araldoEvening,
@@ -278,6 +283,9 @@ data class TimerDraft(
             radiusMeters = radiusM,
             // I preavvisi extra valgono solo se il preavviso è acceso.
             extraWarnsMs = if (warnEnabled) extraWarnsMs else emptyList(),
+            // Notifica periodica "ogni X di uso" (indipendente dal preavviso).
+            notifyEveryAmount = notifyEveryValue.toIntOrNull() ?: 0,
+            notifyEveryUnit = notifyEveryUnit,
         )
         // Preavviso: se acceso, il tempo dev'essere valido; se spento, vale 0.
         val warn = if (warnEnabled) warnValue.toIntOrNull() ?: return null else 0
@@ -533,7 +541,6 @@ private fun GuardiansNav() {
 
         Screen.TRAVEL -> TravelScreen(onBack = { goBack() })
 
-        Screen.SPELLS -> SpellsScreen(onBack = { goBack() })
 
         Screen.SETTINGS -> SettingsScreen(
             onBack = { goBack() },

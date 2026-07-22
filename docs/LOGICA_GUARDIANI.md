@@ -53,13 +53,29 @@ blocca fino al reset.
 - Campo `notifyAfterOpens`: manda una notifica dopo tot aperture.
 - Una riapertura entro 20 secondi non conta come "nuova apertura".
 
-### 5. Il Messaggero (pentagono arancione)
+### 5. Il Messaggero (elmo arancione)
 **Non blocca: avvisa con insistenza crescente** mentre continui a usare l'app.
 - Campo `limitAmount`: dopo quanto uso continuo parte il primo avviso.
-- Campo `pace` (ritmo): Programmabile (cadenza fissa `resetAmount`) o
-  Gentile/Media/Incalzante/Insopportabile (gli intervalli si stringono da soli).
 - Campo `maxNotices`: tetto agli avvisi (0 = illimitati).
 - Campo `messages`: messaggi personalizzati (vuoto = quelli predefiniti).
+
+#### I livelli, definiti con precisione (formula in `messengerGapMs`)
+L'intervallo tra l'avviso N e il successivo è:
+**intervallo = primo avviso (`limitAmount`) × fattore^N**, con un pavimento
+minimo sotto cui non si scende. Esempio con primo avviso a **10 minuti**:
+
+| Ritmo | Fattore | 2° avviso dopo | 3° | 4° | Pavimento |
+|---|---|---|---|---|---|
+| **Programmabile** | — | cadenza fissa: ogni `resetAmount` | idem | idem | 30 s |
+| **Gentile** | 0.75 | 7 min 30 s | 5 min 37 s | 4 min 13 s | 30 s |
+| **Media** | 0.55 | 5 min 30 s | 3 min 1 s | 1 min 40 s | 30 s |
+| **Incalzante** | 0.40 | 4 min | 1 min 36 s | 38 s | 30 s |
+| **Insopportabile** | 0.22 | 2 min 12 s | 29 s | 10 s | **10 s** |
+
+In pratica: *Gentile* ti tiene compagnia, *Media* ti punzecchia, *Incalzante*
+ti mette fretta, *Insopportabile* è un bombardamento che rende l'app
+insopportabile da usare (è il suo scopo). I fattori sono in
+`MessengerPace` (model/GuardianTimer.kt) e si possono ritoccare lì.
 
 ### 6. L'Araldo (semicerchio indaco)
 **Protegge risveglio e sera imparando i tuoi ritmi.** Vedi

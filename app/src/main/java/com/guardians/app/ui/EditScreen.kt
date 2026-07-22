@@ -747,6 +747,35 @@ fun EditScreen(
             }
         }
 
+        // Notifica PERIODICA (guardiani 1): "avvisami ogni X di uso", per i
+        // tipi che contano il tempo. Convive con i preavvisi o li sostituisce.
+        if (configType == TimerType.SENTINELLA || configType == TimerType.GUARDIANO) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                DurationField(
+                    label = tr(
+                        "Notifica ogni… (vuoto = mai)",
+                        "Notify every… (empty = never)",
+                    ),
+                    value = draft.notifyEveryValue,
+                    unit = draft.notifyEveryUnit,
+                    onValueChange = { onDraftChange(draft.copy(notifyEveryValue = it)) },
+                    onUnitChange = { onDraftChange(draft.copy(notifyEveryUnit = it)) },
+                )
+                Text(
+                    tr(
+                        "Una notifica a ogni scaglione d'uso (es. ogni 15 minuti: " +
+                            "\"hai usato 15 min\", \"30 min\"…). In alternativa o " +
+                            "in aggiunta agli avvisi prima del blocco.",
+                        "A notification at each usage step (e.g. every 15 minutes: " +
+                            "\"you've used 15 min\", \"30 min\"…). Alongside or " +
+                            "instead of the pre-block warnings.",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Text(
             tr("App da sorvegliare", "Apps to watch"),
             style = MaterialTheme.typography.titleMedium,

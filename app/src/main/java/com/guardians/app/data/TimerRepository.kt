@@ -46,6 +46,12 @@ object TimerRepository {
 
     fun setEnabled(context: Context, id: String, enabled: Boolean) {
         persist(context, _timers.value.map { if (it.id == id) it.copy(enabled = enabled) else it })
+        // Riattivare un guardiano = volere che ENTRI IN AZIONE SUBITO: si
+        // sveglia il motore all'istante, senza aspettare che tu torni in home
+        // (prima il servizio ripartiva solo dalla schermata principale).
+        if (enabled) {
+            com.guardians.app.service.MonitorService.start(context)
+        }
     }
 
     private fun persist(context: Context, list: List<GuardianTimer>) {
@@ -78,6 +84,8 @@ object TimerRepository {
                 put("warnAmount", t.warnAmount)
                 put("warnUnit", t.warnUnit.name)
                 put("extraWarnsMs", org.json.JSONArray(t.extraWarnsMs))
+                put("notifyEveryAmount", t.notifyEveryAmount)
+                put("notifyEveryUnit", t.notifyEveryUnit.name)
                 // JSON non ammette NaN: salva le coordinate solo se impostate.
                 if (t.hasLocation) {
                     put("latitude", t.latitude)
@@ -130,6 +138,10 @@ object TimerRepository {
                 extraWarnsMs = o.optJSONArray("extraWarnsMs")?.let { arr ->
                     (0 until arr.length()).map { arr.getLong(it) }
                 } ?: emptyList(),
+                notifyEveryAmount = o.optInt("notifyEveryAmount", 0),
+                notifyEveryUnit = TimeUnit.valueOf(
+                    o.optString("notifyEveryUnit", TimeUnit.MINUTES.name)
+                ),
                 latitude = o.optDouble("latitude", Double.NaN),
                 longitude = o.optDouble("longitude", Double.NaN),
                 radiusMeters = o.optInt("radiusMeters", 150),

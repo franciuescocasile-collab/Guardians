@@ -110,6 +110,11 @@ object SpellsRepository {
         } else {
             cancelFreezeEnd(context)
         }
+        // Il blocco (e la notifica-countdown) li applica il motore: assicurati
+        // che sia acceso anche se nessun guardiano è attivo.
+        if (untilEpochMs > System.currentTimeMillis()) {
+            com.guardians.app.service.MonitorService.start(context)
+        }
     }
 
     fun setFreezeNotify(context: Context, enabled: Boolean) {

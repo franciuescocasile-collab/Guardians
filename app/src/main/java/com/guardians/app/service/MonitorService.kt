@@ -82,6 +82,9 @@ class MonitorService : Service() {
         // Un risveglio è VERO solo se lo schermo resta acceso almeno così a
         // lungo: sotto è un'occhiata (notifica, ora, pipì notturna) — 3, 3.3.
         private const val ARALDO_BRIEF_WAKE_MS = 10L * 60_000L
+        // Notifica-countdown del Congelamento.
+        private const val FREEZE_STATUS_CHANNEL_ID = "guardians_freeze_status"
+        private const val FREEZE_STATUS_NOTIFICATION_ID = 79
         private const val KEY_STATE = "usage_state"
         private const val KEY_WEEKLY_PENDING = "weekly_report_pending"
 
@@ -256,7 +259,18 @@ class MonitorService : Service() {
         handler.post(ticker)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Ogni start() = un TICK IMMEDIATO (guardiani 3): chi riattiva un
+        // guardiano vuole che entri in azione subito, non al prossimo giro.
+        // Se eravamo in sonno profondo (batteria), ci si sveglia comunque.
+        if (deepSleeping) {
+            maybeWakeFromDeepSleep()
+        } else {
+            handler.removeCallbacks(ticker)
+            handler.post(ticker)
+        }
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -409,9 +423,17 @@ class MonitorService : Service() {
         // L'Incantesimo d'Ombra sospende le squadre colpite; scaduto il countdown
         // la protezione riprende da sola. Inoltre una squadra vale solo nei
         // giorni scelti nella sua pianificazione settimanale.
-        val timers = if (traveling) emptyList() else TimerRepository.timers.value.filter {
-            it.enabled && !SpellsRepository.isShadowed(it.teamName) &&
-                TeamsRepository.isTeamActiveToday(it.teamName)
+        // PAUSA (sostituisce gli incantesimi): durante la pausa i guardiani
+        // vedono ma non intervengono; allo scadere riprendono da soli.
+        com.guardians.app.data.PauseRepository.load(this)
+        val paused = com.guardians.app.data.PauseRepository.isPaused()
+        val timers = if (traveling || paused) {
+            emptyList()
+        } else {
+            TimerRepository.timers.value.filter {
+                it.enabled && !SpellsRepository.isShadowed(it.teamName) &&
+                    TeamsRepository.isTeamActiveToday(it.teamName)
+            }
         }
         // Segna il giorno come "con guardiani" (una volta al giorno) per il
         // traguardo "senza guardiani" (7.1). Guardia in memoria: niente prefs
@@ -494,6 +516,9 @@ class MonitorService : Service() {
         ) {
             trigger(freezeTimer(freezeUntil), foreground)
         }
+        // Notifica FISSA col countdown del congelamento (congelamento 1): si
+        // vede quanto manca anche senza sbloccare. Aggiornata ogni ~30s.
+        updateFreezeNotification(now, freezeUntil)
 
         for (timer in timers) {
             // La Vedetta presta il suo potere a un altro guardiano, ma solo quando
@@ -529,6 +554,7 @@ class MonitorService : Service() {
                             trigger(timer, foreground!!, rejected = true)
                         } else {
                             maybeWarn(timer, timer.limitMs - used)
+                            maybeNotifyEvery(timer, used)
                             if (used >= timer.limitMs) {
                                 blockedToday.add(timer.id)
                                 persistState()
@@ -563,6 +589,7 @@ class MonitorService : Service() {
                             continuousMs[timer.id] = used
                             lastSeenMs[timer.id] = now
                             maybeWarn(timer, timer.limitMs - used)
+                            maybeNotifyEvery(timer, used)
                             if (used >= timer.limitMs) {
                                 continuousMs[timer.id] = 0L
                                 warned.removeAll { it == timer.id || it.startsWith("${timer.id}:") }
@@ -1023,6 +1050,95 @@ class MonitorService : Service() {
                 "Il telefono può aspettare, tu no.",
                 "Piccole pause, grandi risultati.",
             ).random()
+        }
+    }
+
+    // Stato della notifica-countdown del Congelamento (congelamento 1).
+    private var freezeNotifShowing = false
+    private var freezeNotifLastAt = 0L
+
+    // Notifica PERIODICA "ogni X di uso" (guardiani 1): l'ultimo scaglione
+    // notificato per timer, così ogni scaglione avvisa una volta sola.
+    private val notifyEveryBucket = mutableMapOf<String, Long>()
+
+    /**
+     * Avvisa ogni [GuardianTimer.notifyEveryMs] di uso: quando [usedMs] entra
+     * in un nuovo scaglione manda una notifica col totale usato. Se il
+     * conteggio riparte da zero (pausa, nuovo giorno), lo scaglione si riallinea
+     * in silenzio.
+     */
+    private fun maybeNotifyEvery(timer: GuardianTimer, usedMs: Long) {
+        val step = timer.notifyEveryMs
+        if (step <= 0L) return
+        val bucket = usedMs / step
+        val last = notifyEveryBucket[timer.id] ?: 0L
+        if (bucket == last) return
+        notifyEveryBucket[timer.id] = bucket
+        if (bucket > last) {
+            sendWarning(
+                timer,
+                tr(
+                    "${timer.name}: hai usato le app sorvegliate per " +
+                        "${formatMs(usedMs)}.",
+                    "${timer.name}: you've used the watched apps for " +
+                        "${formatMs(usedMs)}.",
+                )
+            )
+        }
+    }
+
+    /**
+     * Notifica fissa col conto alla rovescia del Congelamento: appare quando la
+     * sessione è attiva (aggiornata ogni ~30 secondi, silenziosa) e sparisce da
+     * sola quando finisce o viene terminata.
+     */
+    private fun updateFreezeNotification(now: Long, freezeUntil: Long) {
+        val active = SpellsRepository.isFreezeSessionActive()
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!active) {
+                if (freezeNotifShowing) {
+                    nm.cancel(FREEZE_STATUS_NOTIFICATION_ID)
+                    freezeNotifShowing = false
+                }
+                return
+            }
+            if (freezeNotifShowing && now - freezeNotifLastAt < 30_000L) return
+            freezeNotifLastAt = now
+            freezeNotifShowing = true
+            val channel = NotificationChannel(
+                FREEZE_STATUS_CHANNEL_ID,
+                tr("Congelamento in corso", "Freeze in progress"),
+                NotificationManager.IMPORTANCE_LOW,   // silenziosa, niente suono
+            )
+            nm.createNotificationChannel(channel)
+            val open = android.app.PendingIntent.getActivity(
+                this, 791,
+                Intent(this, com.guardians.app.MainActivity::class.java),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                    android.app.PendingIntent.FLAG_IMMUTABLE,
+            )
+            val text = if (now < freezeUntil) {
+                tr("Ancora ", "Still ") +
+                    formatMs((freezeUntil - now).coerceAtLeast(1000L)) +
+                    tr(" al disgelo.", " to the thaw.")
+            } else {
+                tr("Oltre il tempo: più ", "Past time: +") +
+                    formatMs((now - freezeUntil).coerceAtLeast(1000L)) +
+                    tr(" — grande!", " — great!")
+            }
+            val n = androidx.core.app.NotificationCompat
+                .Builder(this, FREEZE_STATUS_CHANNEL_ID)
+                .setSmallIcon(com.guardians.app.R.drawable.ic_stat_guardian)
+                .setContentTitle(tr("❄ Congelamento attivo", "❄ Freeze active"))
+                .setContentText(text)
+                .setContentIntent(open)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setSilent(true)
+                .build()
+            nm.notify(FREEZE_STATUS_NOTIFICATION_ID, n)
+        } catch (_: Exception) {
         }
     }
 

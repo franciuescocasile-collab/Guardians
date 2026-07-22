@@ -328,8 +328,10 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
     val refColor = MaterialTheme.colorScheme.onSurfaceVariant
     val topLabelPad = 16f  // spazio riservato in cima per il minutaggio
     val barH = 134f + topLabelPad
-    // Spazio a SINISTRA per le etichette orarie (stat 1: "fai spazio").
-    val leftPad = 30f
+    // Spazio a SINISTRA per le etichette orarie (stat 1). È in DP: lo sfondo
+    // DEVE convertirlo in px con .toPx() (BUG stat 3: prima lo sfondo usava 30
+    // pixel grezzi mentre le barre 30dp ≈ 90px → sfalsati).
+    val leftPadDp = 30.dp
     val n = series.size
     // Sopra le 100 ore l'etichetta "150h" non ci sta: mostriamo solo il numero
     // e la nota "in ore" in alto (stat 3).
@@ -369,6 +371,7 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
             // orarie di riferimento con etichetta a sinistra (stat 1: lo sfondo
             // non è più sfalsato, colW è lo stesso delle barre).
             Canvas(Modifier.fillMaxSize()) {
+                val leftPad = leftPadDp.toPx()   // STESSA misura delle barre (dp→px)
                 val plotTop = topLabelPad
                 val plotH = size.height - plotTop
                 val colAreaW = size.width - leftPad
@@ -403,12 +406,12 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                 }
             }
             // Area barre: NIENTE spaziatura tra le colonne, così ogni barra sta
-            // esattamente dentro la sua banda di sfondo (stat 1).
+            // esattamente dentro la sua banda di sfondo (stat 3).
             Row(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = leftPad.dp, top = topLabelPad.dp),
+                    .padding(start = leftPadDp, top = topLabelPad.dp),
             ) {
                 series.forEachIndexed { i, pair ->
                     val ms = pair.second
@@ -462,7 +465,7 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                 Canvas(
                     Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = leftPad.dp, bottom = ((barH - topLabelPad) * goalFrac).dp)
+                        .padding(start = leftPadDp, bottom = ((barH - topLabelPad) * goalFrac).dp)
                         .fillMaxWidth()
                         .height(2.dp),
                 ) {
@@ -477,14 +480,14 @@ fun PeriodBarChart(series: List<Pair<String, Long>>, goalMs: Long) {
                 }
             }
             // Asse di base allineato.
-            Canvas(Modifier.align(Alignment.BottomStart).padding(start = leftPad.dp).fillMaxWidth().height(1.dp)) {
+            Canvas(Modifier.align(Alignment.BottomStart).padding(start = leftPadDp).fillMaxWidth().height(1.dp)) {
                 drawLine(gridColor, Offset(0f, 0f), Offset(size.width, 0f), 2f)
             }
         }
         Spacer(Modifier.height(4.dp))
         // Etichette a una sola riga sotto ogni barra (senza spaziatura: allineate).
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = leftPad.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = leftPadDp),
         ) {
             series.forEach { (label, _) ->
                 Text(

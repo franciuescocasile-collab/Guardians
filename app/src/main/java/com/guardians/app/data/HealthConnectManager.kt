@@ -69,14 +69,75 @@ object HealthConnectManager {
         emptyList()
     }
 
+    // ------------------------------------------------------------------
+    //  NOTTE UNIFICATA (sonno 3): i blocchi di sonno spezzati da brevi
+    //  risvegli vengono UNITI in un'unica notte, invece di tenere solo
+    //  l'ultimo (o il più lungo) blocco.
+    // ------------------------------------------------------------------
+
+    /** Sotto questo intervallo di veglia, due blocchi sono la STESSA notte. */
+    private const val MERGE_GAP_MIN = 60L
+
     /**
-     * L'ultima dormita nelle ultime ~36 ore (la sessione di sonno più recente),
-     * o null se non c'è nulla / mancano permessi. Comodo per la card "Sonno".
+     * Una NOTTE intera, eventualmente composta da più blocchi di sonno:
+     * - [start]: il PRIMO addormentamento (es. 00:00);
+     * - [end]: il risveglio DEFINITIVO del mattino;
+     * - [sleepMin]: sonno EFFETTIVO (somma dei blocchi, senza le veglie);
+     * - [inBedMin]: tempo A LETTO (da start a end, veglie comprese).
      */
-    suspend fun lastSleep(context: Context): SleepSessionRecord? {
+    data class MergedNight(
+        val start: Instant,
+        val end: Instant,
+        val sleepMin: Long,
+        val inBedMin: Long,
+        val sessions: List<SleepSessionRecord>,
+    ) {
+        val awakeMin: Long get() = (inBedMin - sleepMin).coerceAtLeast(0L)
+    }
+
+    /**
+     * Unisce i blocchi di sonno in NOTTI: ordina per inizio e incolla ogni
+     * blocco al precedente se la veglia in mezzo è sotta [MERGE_GAP_MIN].
+     * Niente "taglio di mezzanotte": si ragiona sugli istanti reali, quindi le
+     * notti a cavallo (o spezzate alle 04:00) restano UNA sola notte.
+     */
+    fun mergeSessions(sessions: List<SleepSessionRecord>): List<MergedNight> {
+        if (sessions.isEmpty()) return emptyList()
+        val sorted = sessions.sortedBy { it.startTime }
+        val nights = mutableListOf<MutableList<SleepSessionRecord>>()
+        for (s in sorted) {
+            val cur = nights.lastOrNull()
+            val lastEnd = cur?.maxOf { it.endTime }
+            if (cur != null && lastEnd != null &&
+                java.time.Duration.between(lastEnd, s.startTime)
+                    .toMinutes() < MERGE_GAP_MIN
+            ) {
+                cur.add(s)
+            } else {
+                nights.add(mutableListOf(s))
+            }
+        }
+        return nights.map { blocks ->
+            val start = blocks.minOf { it.startTime }
+            val end = blocks.maxOf { it.endTime }
+            val sleepMin = blocks.sumOf {
+                java.time.Duration.between(it.startTime, it.endTime)
+                    .toMinutes().coerceAtLeast(0L)
+            }
+            val inBedMin = java.time.Duration.between(start, end)
+                .toMinutes().coerceAtLeast(0L)
+            MergedNight(start, end, sleepMin, inBedMin, blocks)
+        }
+    }
+
+    /**
+     * L'ultima NOTTE (unificata) nelle ultime ~36 ore, o null. Comprende tutti
+     * i blocchi: se hai dormito 00-04 e 04:30-08, inizia alle 00:00.
+     */
+    suspend fun lastNight(context: Context): MergedNight? {
         val end = Instant.now()
         val start = end.minusSeconds(36L * 3600L)
-        return readSleep(context, start, end).maxByOrNull { it.endTime }
+        return mergeSessions(readSleep(context, start, end)).maxByOrNull { it.end }
     }
 
     /**
@@ -100,19 +161,19 @@ object HealthConnectManager {
     data class NightScore(
         val date: java.time.LocalDate,   // il giorno del RISVEGLIO
         val score: Int,                  // 0..100
-        val durationMin: Long,
+        val durationMin: Long,           // sonno EFFETTIVO (veglie escluse)
         val gapMin: Long?,               // distacco telefono→sonno (null = ignoto)
+        val inBedMin: Long = durationMin, // tempo A LETTO (veglie comprese)
     )
 
     /**
-     * Voto del sonno 0..100 che premia soprattutto la QUALITÀ (9.3): quando lo
-     * smartwatch fornisce le fasi, 55 punti vengono da profondo (~20%) e REM
-     * (~22%) e solo 45 dalla durata (pieni tra 7 e 9 ore). Senza fasi (niente
-     * smartwatch) il voto si basa per forza sulla sola durata.
+     * Voto del sonno 0..100 di una NOTTE UNIFICATA, che premia soprattutto la
+     * QUALITÀ (9.3): con le fasi (smartwatch), 55 punti da profondo (~20%) e
+     * REM (~22%) e 45 dalla durata (pieni tra 7 e 9 ore di sonno EFFETTIVO).
+     * Senza fasi, conta la sola durata. Le fasi si sommano su tutti i blocchi.
      */
-    private fun sleepScore(record: SleepSessionRecord): Int {
-        val durMs = java.time.Duration.between(record.startTime, record.endTime)
-            .toMillis().coerceAtLeast(0L)
+    private fun sleepScore(night: MergedNight): Int {
+        val durMs = night.sleepMin * 60_000L
         val durH = durMs / 3_600_000.0
         // Punteggio-durata normalizzato 0..1 (poi pesato diversamente).
         val durationUnit = when {
@@ -124,13 +185,15 @@ object HealthConnectManager {
         var remMs = 0L
         var stagedMs = 0L
         try {
-            record.stages.forEach { s ->
-                val ms = java.time.Duration.between(s.startTime, s.endTime)
-                    .toMillis().coerceAtLeast(0L)
-                stagedMs += ms
-                when (s.stage) {
-                    SleepSessionRecord.STAGE_TYPE_DEEP -> deepMs += ms
-                    SleepSessionRecord.STAGE_TYPE_REM -> remMs += ms
+            night.sessions.forEach { record ->
+                record.stages.forEach { s ->
+                    val ms = java.time.Duration.between(s.startTime, s.endTime)
+                        .toMillis().coerceAtLeast(0L)
+                    stagedMs += ms
+                    when (s.stage) {
+                        SleepSessionRecord.STAGE_TYPE_DEEP -> deepMs += ms
+                        SleepSessionRecord.STAGE_TYPE_REM -> remMs += ms
+                    }
                 }
             }
         } catch (_: Throwable) {
@@ -149,59 +212,61 @@ object HealthConnectManager {
     }
 
     /**
-     * Le notti dell'ultima settimana con voto e distacco, indicizzate per
-     * giorno del risveglio. Serve al grafico settimanale della pagina Sonno.
+     * Le notti (UNIFICATE) dell'ultima settimana con voto e distacco,
+     * indicizzate per giorno del risveglio definitivo. Se un giorno ha più
+     * notti (es. un pisolino pomeridiano), vale quella col sonno maggiore.
      */
     suspend fun weeklyNightScores(context: Context): Map<java.time.LocalDate, NightScore> {
         val zone = java.time.ZoneId.systemDefault()
         val end = Instant.now()
         val start = end.minusSeconds(8L * 24 * 3600)
-        val sessions = readSleep(context, start, end)
-        if (sessions.isEmpty()) return emptyMap()
+        val nights = mergeSessions(readSleep(context, start, end))
+        if (nights.isEmpty()) return emptyMap()
         val phoneOffs = AraldoData.bedtimeEpochs(context).map { Instant.ofEpochMilli(it) }
         val out = HashMap<java.time.LocalDate, NightScore>()
-        for (s in sessions) {
-            val wakeDay = s.endTime.atZone(zone).toLocalDate()
-            val durMin = java.time.Duration.between(s.startTime, s.endTime)
-                .toMinutes().coerceAtLeast(0L)
-            // Tieni la dormita PIÙ LUNGA del giorno (i pisolini non contano).
+        for (night in nights) {
+            val wakeDay = night.end.atZone(zone).toLocalDate()
+            // Un pisolino non scalza la notte vera dello stesso giorno.
             val existing = out[wakeDay]
-            if (existing != null && existing.durationMin >= durMin) continue
+            if (existing != null && existing.durationMin >= night.sleepMin) continue
+            // Il distacco si misura dal PRIMO addormentamento della notte.
             val gap = phoneOffs
                 .filter {
-                    !it.isAfter(s.startTime) &&
-                        java.time.Duration.between(it, s.startTime).toHours() < 5
+                    !it.isAfter(night.start) &&
+                        java.time.Duration.between(it, night.start).toHours() < 5
                 }
                 .maxOrNull()
-                ?.let { java.time.Duration.between(it, s.startTime).toMinutes() }
-            out[wakeDay] = NightScore(wakeDay, sleepScore(s), durMin, gap)
+                ?.let { java.time.Duration.between(it, night.start).toMinutes() }
+            out[wakeDay] = NightScore(
+                wakeDay, sleepScore(night), night.sleepMin, gap, night.inBedMin,
+            )
         }
         return out
     }
 
     /**
-     * Incrocia i distacchi serali registrati dall'Araldo con le dormite di Health
-     * Connect delle ultime 2 settimane. Per ogni dormita cerca il distacco più
-     * vicino PRIMA dell'addormentamento (entro 5 ore) e calcola il divario.
+     * Incrocia i distacchi serali registrati dall'Araldo con le NOTTI unificate
+     * delle ultime 2 settimane. Per ogni notte cerca il distacco più vicino
+     * PRIMA del primo addormentamento (entro 5 ore) e calcola il divario.
      */
     suspend fun windDownNights(context: Context): List<WindDownNight> {
         val end = Instant.now()
         val start = end.minusSeconds(14L * 24 * 3600L)
-        val sessions = readSleep(context, start, end)
-        if (sessions.isEmpty()) return emptyList()
+        val nights = mergeSessions(readSleep(context, start, end))
+        if (nights.isEmpty()) return emptyList()
         val phoneOffs = AraldoData.bedtimeEpochs(context).map { Instant.ofEpochMilli(it) }
         val out = mutableListOf<WindDownNight>()
-        for (s in sessions) {
+        for (night in nights) {
             val candidate = phoneOffs
                 .filter {
-                    !it.isAfter(s.startTime) &&
-                        java.time.Duration.between(it, s.startTime).toHours() < 5
+                    !it.isAfter(night.start) &&
+                        java.time.Duration.between(it, night.start).toHours() < 5
                 }
                 .maxOrNull()
                 ?: continue
-            val gap = java.time.Duration.between(candidate, s.startTime).toMinutes().coerceAtLeast(0L)
-            val dur = java.time.Duration.between(s.startTime, s.endTime).toMinutes().coerceAtLeast(0L)
-            out.add(WindDownNight(s.startTime, candidate, gap, dur))
+            val gap = java.time.Duration.between(candidate, night.start)
+                .toMinutes().coerceAtLeast(0L)
+            out.add(WindDownNight(night.start, candidate, gap, night.sleepMin))
         }
         return out.sortedBy { it.sleepOnset }
     }

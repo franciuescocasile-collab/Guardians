@@ -137,9 +137,14 @@ fun AppPickerScreen(
                 // Gli spazi ai bordi non devono rompere la ricerca ("maps " deve
                 // trovare Maps): il confronto usa la query ripulita.
                 val q = query.trim()
-                val filtered = list.filter {
-                    q.isBlank() || it.label.contains(q, ignoreCase = true)
-                }
+                // Le app GIÀ SELEZIONATE stanno IN CIMA (altro 5): quando
+                // modifichi un guardiano le ritrovi subito, senza cercarle.
+                // L'ordine si calcola una volta all'apertura (initialSelection),
+                // così spuntare/togliere una spunta non fa saltare le righe.
+                val initialSelection = remember(list) { selection }
+                val filtered = list
+                    .filter { q.isBlank() || it.label.contains(q, ignoreCase = true) }
+                    .sortedBy { it.packageName !in initialSelection }
                 // "Seleziona tutte" agisce sulle app elencate (quindi rispetta la ricerca).
                 val allSelected = filtered.isNotEmpty() &&
                     filtered.all { selection.contains(it.packageName) }

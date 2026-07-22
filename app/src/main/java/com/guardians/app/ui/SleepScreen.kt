@@ -39,7 +39,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -212,72 +215,75 @@ private fun SmartAlarmCard() {
             )
             Spacer(Modifier.height(10.dp))
 
+            // La mezzaluna e i giorni restano SEMPRE visibili (sonno 2), anche
+            // a sveglia attiva: così vedi sempre com'è impostata. Cambiare i
+            // cicli mentre è attiva vale dalla prossima rilevazione.
+            CrescentSlider(
+                cycles = cycles,
+                onChange = { SmartAlarmRepository.setCycles(context, it) },
+            )
+            Spacer(Modifier.height(10.dp))
+            // Ripetizione per giorni (9). Vuoto = una-tantum.
+            val alarmDays by SmartAlarmRepository.days.collectAsState()
+            Text(
+                tr(
+                    "Ripeti nei giorni (vuoto = una volta sola):",
+                    "Repeat on days (empty = one-shot):",
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(6.dp))
+            WeekDaysEditor(alarmDays) { iso ->
+                val next = if (alarmDays.contains(iso)) alarmDays - iso
+                else alarmDays + iso
+                SmartAlarmRepository.setDays(context, next)
+            }
+            Spacer(Modifier.height(10.dp))
+
             if (armed || scheduled) {
-                if (scheduled) {
-                    // Sonno rilevato: orario del risveglio calcolato.
-                    Text(
-                        tr("Ti sveglierò alle ", "I'll wake you at ") +
-                            Instant.ofEpochMilli(alarmAt).atZone(zone).format(fmt),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        tr(
-                            "Suonerà anche a schermo bloccato. \"Spegni\" richiede la " +
-                                "pressione prolungata.",
-                            "It rings even on the lock screen. \"Stop\" needs a long press.",
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    // Armata, in attesa che ti addormenti.
-                    Text(
-                        tr("In ascolto del tuo sonno…", "Listening for your sleep…"),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        tr(
-                            "Appena starai fermo col telefono spento per un po', farò " +
-                                "partire il conteggio di $cycles cicli.",
-                            "As soon as you rest with the screen off for a while, I'll " +
-                                "start counting $cycles cycles.",
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = { SmartAlarmRepository.cancel(context) }) {
-                    Text(tr("Disattiva la sveglia", "Turn off the alarm"))
-                }
-            } else {
-                // Slider a mezzaluna col pallino GRANDE e facile da prendere;
-                // in più tocchi direttamente il punto che vuoi (sonno 1).
-                CrescentSlider(
-                    cycles = cycles,
-                    onChange = { SmartAlarmRepository.setCycles(context, it) },
-                )
-                Spacer(Modifier.height(10.dp))
-                // Ripetizione per giorni (9). Vuoto = una-tantum.
-                val alarmDays by SmartAlarmRepository.days.collectAsState()
+                // Banner di stato: programmata (con orario) o in ascolto.
                 Text(
-                    tr(
-                        "Ripeti nei giorni (vuoto = una volta sola):",
-                        "Repeat on days (empty = one-shot):",
-                    ),
-                    style = MaterialTheme.typography.labelMedium,
+                    if (scheduled) {
+                        tr("Ti sveglierò alle ", "I'll wake you at ") +
+                            Instant.ofEpochMilli(alarmAt).atZone(zone).format(fmt)
+                    } else {
+                        tr("In ascolto del tuo sonno…", "Listening for your sleep…")
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    if (scheduled) {
+                        tr(
+                            "Suonerà anche a schermo bloccato. \"Spegni\" richiede " +
+                                "la pressione prolungata.",
+                            "It rings even on the lock screen. \"Stop\" needs a long press.",
+                        )
+                    } else {
+                        tr(
+                            "Appena starai fermo col telefono spento per un po', " +
+                                "partirà il conteggio di $cycles cicli.",
+                            "As soon as you rest with the screen off for a while, " +
+                                "the $cycles-cycle count will start.",
+                        )
+                    },
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(6.dp))
-                WeekDaysEditor(alarmDays) { iso ->
-                    val next = if (alarmDays.contains(iso)) alarmDays - iso
-                    else alarmDays + iso
-                    SmartAlarmRepository.setDays(context, next)
+                Button(
+                    onClick = { SmartAlarmRepository.cancel(context) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) {
+                    Text(tr("Disattiva la sveglia", "Turn off the alarm"), fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(10.dp))
+            } else {
                 Button(
                     onClick = { SmartAlarmRepository.arm(context) },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -298,17 +304,27 @@ private fun SmartAlarmCard() {
 private fun CrescentSlider(cycles: Int, onChange: (Int) -> Unit) {
     val track = MaterialTheme.colorScheme.surfaceVariant
     val activeColor = MaterialTheme.colorScheme.primary
-    val frac = (cycles - 3) / 4f
+    // FLUIDO (sonno 1): mentre trascini, il pomello segue il DITO in modo
+    // continuo (dragFrac); lo scatto sui 5 valori riguarda solo il numero.
+    // A dito alzato il pomello si adagia dolcemente sulla tacca (animazione).
+    var dragFrac by remember { mutableStateOf<Float?>(null) }
+    val settledFrac by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = (cycles - 3) / 4f,
+        animationSpec = androidx.compose.animation.core.tween(220),
+        label = "crescentSettle",
+    )
+    val frac = dragFrac ?: settledFrac
 
-    // Converte un tocco/trascinamento (sulla metà superiore) in numero di cicli.
-    fun cyclesFrom(pos: Offset, size: androidx.compose.ui.geometry.Size): Int? {
+    // Frazione CONTINUA (0..1) del punto toccato sulla mezzaluna; null se fuori.
+    fun fracFrom(pos: Offset, size: androidx.compose.ui.geometry.Size): Float? {
         val cx = size.width / 2f
         val cy = size.height
         val deg = Math.toDegrees(atan2((pos.y - cy).toDouble(), (pos.x - cx).toDouble()))
         if (deg !in -180.0..0.0) return null
-        val f = ((deg + 180.0) / 180.0).toFloat()
-        return 3 + (f * 4f).roundToInt().coerceIn(0, 4)
+        return ((deg + 180.0) / 180.0).toFloat()
     }
+
+    fun cyclesOf(f: Float): Int = 3 + (f * 4f).roundToInt().coerceIn(0, 4)
 
     Box(
         Modifier
@@ -322,15 +338,27 @@ private fun CrescentSlider(cycles: Int, onChange: (Int) -> Unit) {
                 // Trascinamento: consuma il gesto così NON fa scorrere la pagina.
                 .pointerInput(Unit) {
                     detectDragGestures(
-                        onDragStart = { cyclesFrom(it, size.toSize())?.let(onChange) },
+                        onDragStart = { p ->
+                            fracFrom(p, size.toSize())?.let { f ->
+                                dragFrac = f
+                                onChange(cyclesOf(f))
+                            }
+                        },
+                        onDragEnd = { dragFrac = null },
+                        onDragCancel = { dragFrac = null },
                     ) { change, _ ->
                         change.consume()
-                        cyclesFrom(change.position, size.toSize())?.let(onChange)
+                        fracFrom(change.position, size.toSize())?.let { f ->
+                            dragFrac = f
+                            onChange(cyclesOf(f))
+                        }
                     }
                 }
                 // Tocco secco: imposta subito il valore del punto toccato.
                 .pointerInput(Unit) {
-                    detectTapGestures { p -> cyclesFrom(p, size.toSize())?.let(onChange) }
+                    detectTapGestures { p ->
+                        fracFrom(p, size.toSize())?.let { onChange(cyclesOf(it)) }
+                    }
                 },
         ) {
             val cx = size.width / 2f
@@ -360,7 +388,7 @@ private fun CrescentSlider(cycles: Int, onChange: (Int) -> Unit) {
                     radius = 6f, center = Offset(tx, ty),
                 )
             }
-            // Il POMELLO grosso e ben visibile (sonno 1: facile da prendere).
+            // Il POMELLO grosso: segue il dito in continuo mentre trascini.
             val ka = Math.toRadians(180.0 + frac * 180.0)
             val kx = cx + (radius * cos(ka)).toFloat()
             val ky = cy + (radius * sin(ka)).toFloat()
