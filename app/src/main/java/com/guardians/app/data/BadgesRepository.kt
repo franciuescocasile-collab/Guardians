@@ -83,6 +83,12 @@ enum class Badge(
         "You stayed under your goal with no active guardian",
         true, 0xFFF06292, 0xFFC2185B, "💪",
     ),
+    ALL_TYPES(
+        "Esercito completo", "Full army",
+        "Hai avuto attivo almeno un guardiano di OGNI tipo insieme",
+        "You had at least one active guardian of EVERY type at once",
+        true, 0xFF7E57C2, 0xFF4527A0, "🎖️",
+    ),
     ;
 
     val title: String get() = tr(titleIt, titleEn)
@@ -199,6 +205,16 @@ object BadgesRepository {
             val ok = completed.any { (d, ms) -> ms < goalMs && d.toString() !in guarded }
             if (ok) unlock(context, Badge.UNDER_GOAL_NO_GUARDIANS)
         }
+
+        // Esercito completo (Domande 6): almeno un guardiano ATTIVO di ogni
+        // tipo configurabile dall'editor, tutti insieme adesso.
+        val neededTypes = com.guardians.app.model.TimerType.entries
+            .filter { !it.configuredFromHub }.toSet()
+        val activeTypes = TimerRepository.timers.value
+            .filter { it.enabled }
+            .map { it.type }
+            .toSet()
+        if (activeTypes.containsAll(neededTypes)) unlock(context, Badge.ALL_TYPES)
     }
 
     private fun parse(raw: String?): Set<String> = try {

@@ -44,6 +44,27 @@ object TimerRepository {
         persist(context, _timers.value.filterNot { it.id == id })
     }
 
+    /** Duplica un guardiano con nuovo id e nome "… (copia)". */
+    fun duplicate(context: Context, id: String) {
+        val orig = _timers.value.firstOrNull { it.id == id } ?: return
+        val copy = orig.copy(
+            id = java.util.UUID.randomUUID().toString(),
+            name = orig.name + tr(" (copia)", " (copy)"),
+        )
+        persist(context, _timers.value + copy)
+    }
+
+    /**
+     * Duplica un'intera squadra: copia TUTTI i suoi guardiani in una nuova
+     * squadra [newTeam] (le condizioni dei Comandanti si copiano a parte).
+     */
+    fun duplicateTeam(context: Context, team: String, newTeam: String) {
+        val copies = _timers.value.filter { it.teamName == team }.map {
+            it.copy(id = java.util.UUID.randomUUID().toString(), team = newTeam)
+        }
+        if (copies.isNotEmpty()) persist(context, _timers.value + copies)
+    }
+
     fun setEnabled(context: Context, id: String, enabled: Boolean) {
         persist(context, _timers.value.map { if (it.id == id) it.copy(enabled = enabled) else it })
         // Riattivare un guardiano = volere che ENTRI IN AZIONE SUBITO: si

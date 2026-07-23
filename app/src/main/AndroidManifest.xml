@@ -22,6 +22,8 @@
     <!-- Posizione: serve solo alla Vedetta (guardiano basato sul luogo) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Comandante Vedetta: legge l'SSID del Wi-Fi (basso consumo vs GPS). -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Miglior sforzo per chiudere il Picture-in-Picture dell'app bloccata -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <!-- Necessario per elencare le app installate nel selettore -->

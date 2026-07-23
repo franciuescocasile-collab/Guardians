@@ -424,15 +424,21 @@ class MonitorService : Service() {
         // la protezione riprende da sola. Inoltre una squadra vale solo nei
         // giorni scelti nella sua pianificazione settimanale.
         // PAUSA (sostituisce gli incantesimi): durante la pausa i guardiani
-        // vedono ma non intervengono; allo scadere riprendono da soli.
+        // vedono ma non intervengono; allo scadere riprendono da soli. Può
+        // essere globale o della singola squadra (Squadre 3).
         com.guardians.app.data.PauseRepository.load(this)
-        val paused = com.guardians.app.data.PauseRepository.isPaused()
-        val timers = if (traveling || paused) {
+        val timers = if (traveling) {
             emptyList()
         } else {
             TimerRepository.timers.value.filter {
                 it.enabled && !SpellsRepository.isShadowed(it.teamName) &&
-                    TeamsRepository.isTeamActiveToday(it.teamName)
+                    !com.guardians.app.data.PauseRepository.isTeamPaused(it.teamName) &&
+                    // I 3 COMANDANTI della squadra: giorno E ora E luogo devono
+                    // essere OK, altrimenti i guardiani non intervengono (ma i
+                    // conteggi continuano nel passo dei "sospesi").
+                    TeamsRepository.isTeamActiveToday(it.teamName) &&
+                    TeamsRepository.isTimeActiveNow(it.teamName) &&
+                    isTeamPlaceActive(it.teamName)
             }
         }
         // Segna il giorno come "con guardiani" (una volta al giorno) per il
@@ -445,10 +451,13 @@ class MonitorService : Service() {
                 com.guardians.app.data.BadgesRepository.markGuardedToday(this)
             }
         }
-        // Aggiorna la posizione (Vedetta) solo se serve, e non troppo spesso.
-        if (interactive && timers.any { it.type == TimerType.VEDETTA && it.hasLocation } &&
-            now - lastLocationAt >= LOCATION_EVERY_MS
-        ) {
+        // Aggiorna la posizione solo se serve (Vedetta-guardiano O Comandante
+        // Vedetta con luoghi GPS), e non troppo spesso.
+        val needsLocation = timers.any { it.type == TimerType.VEDETTA && it.hasLocation } ||
+            TimerRepository.timers.value.any {
+                it.enabled && TeamsRepository.placesFor(it.teamName).points.isNotEmpty()
+            }
+        if (interactive && needsLocation && now - lastLocationAt >= LOCATION_EVERY_MS) {
             refreshLocation()
             lastLocationAt = now
         }
@@ -1325,6 +1334,51 @@ class MonitorService : Service() {
             loc.latitude, loc.longitude, timer.latitude, timer.longitude, result,
         )
         return result[0] <= timer.radiusMeters
+    }
+
+    /**
+     * Comandante VEDETTA di una squadra: sei in un luogo consentito? Priorità
+     * al RISPARMIO batteria (Guardiani 1.3): prima si prova il Wi-Fi (senza GPS),
+     * e SOLO se non basta si usa il GPS.
+     */
+    private fun isTeamPlaceActive(team: String): Boolean {
+        val places = TeamsRepository.placesFor(team)
+        if (places.isEverywhere) return true
+        // 1° controllo: Wi-Fi per SSID (copre ripetitori/mesh: stesso nome).
+        if (places.ssids.isNotEmpty()) {
+            val ssid = currentWifiSsid()
+            if (ssid != null && places.ssids.any { it.equals(ssid, ignoreCase = true) }) {
+                return true
+            }
+        }
+        // 2° controllo: GPS di riserva sui luoghi salvati.
+        if (places.points.isNotEmpty()) {
+            val loc = lastLocation ?: return false
+            return places.points.any { p ->
+                val res = FloatArray(1)
+                android.location.Location.distanceBetween(
+                    loc.latitude, loc.longitude, p.lat, p.lon, res,
+                )
+                res[0] <= p.radiusM
+            }
+        }
+        // Solo Wi-Fi configurati ma nessuno collegato → fuori zona.
+        return false
+    }
+
+    /** L'SSID del Wi-Fi a cui sei connesso adesso, o null (defensivo). */
+    private fun currentWifiSsid(): String? = try {
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE)
+            as android.net.wifi.WifiManager
+        @Suppress("DEPRECATION")
+        val raw = wm.connectionInfo?.ssid
+        if (raw == null || raw.contains("unknown", ignoreCase = true)) {
+            null
+        } else {
+            raw.trim().trim('"').takeIf { it.isNotBlank() }
+        }
+    } catch (_: Throwable) {
+        null
     }
 
     /**

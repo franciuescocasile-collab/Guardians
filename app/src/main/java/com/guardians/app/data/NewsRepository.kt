@@ -29,6 +29,30 @@ object NewsRepository {
     /** Dal più recente al più vecchio. Aggiungere IN CIMA la voce di ogni build. */
     val items: List<NewsItem> = listOf(
         NewsItem(
+            "3.19.0",
+            "I 3 Comandanti, nuovi elmi e nuovo logo",
+            "The 3 Commanders, new helms and new logo",
+            "NUOVI ELMI per tutti i guardiani e NUOVO LOGO dell'app (ritagliati e " +
+                "centrati). Grande novità nelle SQUADRE: in cima a ogni squadra ci " +
+                "sono 3 COMANDANTI in card quadrate — il Castellano decide i " +
+                "GIORNI, il Custode le ORE (fino a 3 fasce), la Vedetta i LUOGHI " +
+                "(più posizioni GPS e più reti Wi-Fi). I guardiani agiscono solo " +
+                "se giorno E ora E luogo sono tutti giusti; il Wi-Fi viene " +
+                "controllato per primo per consumare meno del GPS. Ora puoi " +
+                "DUPLICARE una squadra o un singolo guardiano, e mettere in PAUSA " +
+                "una singola squadra (non solo tutte). Nuovo traguardo nascosto. " +
+                "Nella sveglia, i pallini della mezzaluna ora si vedono sempre.",
+            "NEW HELMS for every guardian and a NEW APP LOGO (cropped and " +
+                "centered). Big news in TEAMS: at the top of each team there are 3 " +
+                "COMMANDERS in square cards — the Castellan sets the DAYS, the " +
+                "Keeper the HOURS (up to 3 bands), the Lookout the PLACES (multiple " +
+                "GPS spots and multiple Wi-Fi networks). Guardians act only if day " +
+                "AND hour AND place are all right; Wi-Fi is checked first to use " +
+                "less than GPS. You can now DUPLICATE a team or a single guardian, " +
+                "and PAUSE a single team (not just all). New hidden achievement. In " +
+                "the alarm, the crescent's dots are now always visible.",
+        ),
+        NewsItem(
             "3.18.0",
             "La Pausa, notti intere e guardiani scattanti",
             "The Pause, whole nights and snappy guardians",

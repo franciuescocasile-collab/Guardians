@@ -378,13 +378,20 @@ private fun CrescentSlider(cycles: Int, onChange: (Int) -> Unit) {
                 useCenter = false, topLeft = rect.topLeft, size = rect.size,
                 style = Stroke(width = 34f, cap = StrokeCap.Round),
             )
-            // Tacche dei 5 valori (3..7 cicli).
+            // Tacche dei 5 valori (3..7 cicli), SEMPRE visibili (sonno 1):
+            // prima quelle non raggiunte erano dello stesso colore del binario
+            // e "apparivano" solo quando l'arco attivo le copriva.
+            val idleTick = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.55f)
             for (i in 0..4) {
                 val a = Math.toRadians(180.0 + i * 45.0)
                 val tx = cx + (radius * cos(a)).toFloat()
                 val ty = cy + (radius * sin(a)).toFloat()
                 drawCircle(
-                    color = if (i <= (cycles - 3)) activeColor else track,
+                    color = if (i <= (cycles - 3)) {
+                        androidx.compose.ui.graphics.Color.White
+                    } else {
+                        idleTick
+                    },
                     radius = 6f, center = Offset(tx, ty),
                 )
             }

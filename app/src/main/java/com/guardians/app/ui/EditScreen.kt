@@ -89,6 +89,7 @@ fun EditScreen(
     onSave: (GuardianTimer) -> Unit,
     onDelete: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     // Scroll passato dall'esterno (per restare dov'eri tornando dal selettore
     // app, 5); se assente, uno locale.
     val scroll = scrollState ?: rememberScrollState()
@@ -972,6 +973,17 @@ fun EditScreen(
         }
 
         if (draft.id != null) {
+            // Duplica questo guardiano (Squadre 1): crea una copia e torna
+            // indietro; la ritrovi nell'elenco come "… (copia)".
+            TextButton(
+                onClick = {
+                    com.guardians.app.data.TimerRepository.duplicate(context, draft.id)
+                    onBack()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(tr("Duplica questo guardiano", "Duplicate this guardian"))
+            }
             TextButton(
                 onClick = { onDelete(draft.id) },
                 colors = ButtonDefaults.textButtonColors(contentColor = RedGuardiano),
